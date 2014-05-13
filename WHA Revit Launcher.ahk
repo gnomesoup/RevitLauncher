@@ -24,6 +24,7 @@ Else
 ; Location where icons and images are kept
 supportFolder = %A_ScriptDir%\Support
 
+
 ; Name of the bimGuy. I'm trying to keep it generic but this may need to 
 ; change in the future
 bimGuy = your BIM Coordinator
@@ -47,7 +48,7 @@ IfNotExist %iniPathLocal%
 	FileCopy, %A_ScriptDir%\%programName%.ini, %iniPathLocal%
 	If ErrorLevel ; If copying the file goes wrong, notify and exit
 	{
-		MsgBox, 1, %programName%, We were unable to properly initialize %programName%.  Please see %bimGuy% for additional information.
+		MsgBox, 16, %programName%, We were unable to properly initialize %programName%.  Please see %bimGuy% for additional information.
 		ExitApp
 	}
 	; As long as we are setting things up, make sure the program starts when the user logs including
@@ -73,6 +74,29 @@ iniCentral := class_EasyIni(iniPathCentral)
 detach := iniLocal.Settings.Detach
 workset := iniLocal.Settings.Workset
 debug := iniLocal.Settings.Debug
+; Set location where local files will be saved
+If (iniLocal.Settings.LocalFolder) ;Check if ini file has setting
+{
+	localFolder := iniLocal.Settings.LocalFolder
+}
+Else ;add a setting with the default value to the ini file
+{
+	localFolder = %A_MyDocuments%\Revit
+	iniLocal.AddKey("Settings", "localFolder", localFolder)
+	iniLocal.save()
+} 
+
+; Set whether an explorer window will be opened to the project folder
+If (iniLocal.Settings.ExploreDefault) ;Check if ini file has setting
+{
+	exploreLaunch := iniLocal.Settings.ExploreDefault
+}
+Else ;add a setting with the default value to the ini file
+{
+	exploreLaunch := 1
+	iniLocal.AddKey("Settings", "ExploreDefault", exploreLaunch)
+	iniLocal.save()
+} 
 
 ; Debug function to make finding problems easier
 DebugMe("Start")
@@ -225,28 +249,30 @@ loop, %centralSections0%
 }
 LV_ModifyCol(1)
 Gui, FindLaunch:Font, s10 c%guiColor1%, Arial
-Gui, FindLaunch:Add, Text, w500 center yp+225, A local file will be created where appropriate and`nopened with the correct version of Revit
+Gui, FindLaunch:Add, Text, w500 center yp+230, Choose a project.  A local file will be created and opened using the correct version of Revit.  Choosing detach will open the project disconnected from the central file.`nDon't see your project listed? Contact %bimGuy%.
 Gui, FindLaunch:Font, s18 cBlack, Arial
 ; Change the button to reflect if we are opening detached or specifed worksets
-If detach
-	Gui, FindLaunch:Add, Button,  w150 yp+50 xp+75 gFindLaunchFind, &Detach
-Else If workset
-	Gui, FindLaunch:Add, Button,  w150 yp+50 xp+75 gFindLaunchFind, &Specify Workset
-Else
-	Gui, FindLaunch:Add, Button,  w150 yp+50 xp+75 gFindLaunchFind, &Launch
-Gui, FindLaunch:Add, Button,  wp xp+200 Default gFindLaunchGuiClose, &Cancel
+Gui, FindLaunch:Add, Button,  w150 yp+55 xp+10 gFindLaunchFind, &Launch
+Gui, FindLaunch:Add, Button,  w150 yp+0 xp+165 gFindLaunchDetach, &Detach
+Gui, FindLaunch:Add, Button,  wp yp+0 xp+165 Default gFindLaunchGuiClose, &Cancel
 GuiControl, FindLaunch:Disable, Button1
+GuiControl, FindLaunch:Disable, Button2
 Gui, FindLaunch:Show
 Return
 
 ; Enable the launch button once the user selects a project
 FindLaunchList:
-If A_GuiEvent = I
+If A_GuiEvent = I 
+{
 	GuiControl, FindLaunch:Enable, Button1
+	GuiControl, FindLaunch:Enable, Button2
+}
 If A_GuiEvent = DoubleClick
 	GoSub, FindLaunchFind
 Return
 
+FindLaunchDetach:
+detach := 1
 ; Get the project selected, set project variables, and run the main routine
 FindLaunchFind:
 RowNumber := 0
@@ -294,9 +320,9 @@ loop, %centralSections0%
 }
 LV_ModifyCol(1)
 Gui, AddProject:Font, s10 c%guiColor1%, Arial
-Gui, AddProject:Add, Text, w500 center yp+250, The selected project will be added to your "Quick Launch" menu.`nA local file will be created and opened using the correct version of Revit.`nNeed a project added? Let %bimGuy% know.
+Gui, AddProject:Add, Text, w500 center yp+230, Choose a project and it will be added to your "Quick Launch" menu.`nA local file will be created and opened using the correct version of Revit.`nDon't see your project listed? Contact %bimGuy%.
 Gui, AddProject:Font, s18 cBlack, Arial
-Gui, AddProject:Add, Button,  w150 yp+50 xp+75 gAddProjectAdd, &Add to list
+Gui, AddProject:Add, Button,  w150 yp+60 xp+75 gAddProjectAdd, &Add to list
 Gui, AddProject:Add, Button,  wp xp+200 Default gAddProjectGuiClose, &Cancel
 GuiControl, Disable, &Add to list
 Gui, AddProject:Show
@@ -318,9 +344,9 @@ loop, %favList0%
 	LV_Add(,iniLocal [favList%A_Index%].Name)
 }
 Gui, RemoveProject:Font, s10 c%guiColor1%, Arial
-Gui, RemoveProject:Add, Text, w500 center yp+250, The selected project will be removed from your "Quick Launch" menu.
+Gui, RemoveProject:Add, Text, w500 center yp+230, The selected project will be removed from your "Quick Launch" menu.
 Gui, RemoveProject:Font, s18 cBlack, Arial
-Gui, RemoveProject:Add, Button,  w250 yp+50 xp+25 gRemoveProjectRemove, &Remove from list
+Gui, RemoveProject:Add, Button,  w250 yp+60 xp+25 gRemoveProjectRemove, &Remove from list
 Gui, RemoveProject:Add, Button,  w150 xp+300 Default gRemoveProjectGuiClose, &Cancel
 GuiControl, Disable, &Remove from list
 Gui, RemoveProject:Show
@@ -409,36 +435,69 @@ return
 SettingsSub:
 detachDefault := iniLocal.Settings.Detach
 worksetDefault := iniLocal.Settings.Workset
+exploreDefault := iniLocal.Settings.ExploreDefault
 linkFile = %A_Startup%\%programName%.lnk
 IfExist %linkFile%
 	startupExist := 1
 Else
 	startupExist := 0
+FileGetVersion, scriptVersion, %A_ScriptFullPath%
 Gui, Settings:New,, %programName%
 Gui, Settings:Font, s24 cBlack, Arial
 Gui, Settings:Add, Text, w500, %programName% Settings:
+
+;Start of default settings section
 Gui, Settings:Font, s12, Arial
 Gui, Settings:Add, Text, yp+80 section, Defaults
 Gui, Settings:Font, s18, Arial
 Gui, Settings:Add, Checkbox, xs+100 ys-5 vdetachCheck gSettingsSubDetach, Detach by default
 GuiControl,, detachCheck, %detachDefault%
 Gui, Settings:Font, s9 c%guiColor1%, Arial
-Gui, Settings:Add, Text, xs+100 ys+30 w400, Controls whether "Detach Models" is enabled when you first open %programName%.  This option is perfect Project Managers who only want to query a model.  You can still temporarily disable it if you need to update drawings.
+Gui, Settings:Add, Text, xs+100 ys+25 w400, Controls whether "Detach Models" is enabled when you first open %programName%.  This option is perfect for Project Managers who only need to query a model.  You can temporarily disable it before launching if you need to save changes to a model.
 Gui, Settings:Font, s12 cBlack, Arial
-Gui, Settings:Add, Text, xp-100 yp+90 section, 
+Gui, Settings:Add, Text, xp-100 yp+75 section,
 Gui, Settings:Font, s18, Arial
 Gui, Settings:Add, Checkbox, xs+100 ys-5 vworksetCheck gSettingsSubWorkset, Specify worksets by default
 GuiControl,, worksetCheck, %worksetDefault%
 Gui, Settings:Font, s9 c%guiColor1%, Arial
-Gui, Settings:Add, Text, xs+100 ys+30 w400, Controls whether the "Specify Worksets" dialog box is opened by default.  Choose this option if you are working on larger Revit models.
+Gui, Settings:Add, Text, xs+100 ys+25 w400, Controls whether the "Specify Worksets" dialog box is opened by default.  Choose this option if you frequently work on larger Revit models.
 Gui, Settings:Font, s12 cBlack, Arial
-Gui, Settings:Add, Text, xp-100 yp+60 section, Startup
+Gui, Settings:Add, Text, xp-100 yp+50 section,
 Gui, Settings:Font, s18, Arial
-Gui, Settings:Add, Checkbox, xs+100 ys-5 vstartupCheck gSettingsSubStartup, "Startup on Windows Login"
+Gui, Settings:Add, Checkbox, xs+100 ys-5 vexploreCheck gSettingsSubExplore, Open Project Folder in Explorer
+GuiControl,, exploreCheck, %exploreDefault%
+Gui, Settings:Font, s9 c%guiColor1%, Arial
+Gui, Settings:Add, Text, xs+100 ys+25 w400, Coming soon... Once enabled, a Windows Explorer window will be opened to the location of the central file when checked.
+
+;Start of behavior at startup section
+Gui, Settings:Font, s12 cBlack, Arial
+Gui, Settings:Add, Text, xp-100 yp+75 section, Startup
+Gui, Settings:Font, s18, Arial
+Gui, Settings:Add, Checkbox, xs+100 ys-5 vstartupCheck gSettingsSubStartup, Startup on Windows Login
 GuiControl,, startupCheck, %startupExist%
 Gui, Settings:Font, s9 c%guiColor1%, Arial
-Gui, Settings:Add, Text, xs+100 ys+30 w400, If checked, %programName% will open automatically when you log in to Windows.  Just set it and forget it. :)
+Gui, Settings:Add, Text, xs+100 ys+25 w400, If checked, %programName% will open automatically when you log in to Windows.  Just set it and forget it. :)
+
+;Start of file locations settings section
+Gui, Settings:Font, s12 cBlack, Arial
+Gui, Settings:Add, Text, xp-100 yp+75 section, Locations
+Gui, Settings:Font, s18, Arial
+Gui, Settings:Add, Text, xs+100 ys-5, Local File Save Location
+Gui, Settings:Font, s9 c%guiColor1%, Arial
+Gui, Settings:Add, Text, xs+100 ys+25 w400 vlocalLocation, %localFolder%
+Gui, Settings:Add, Button, w75 xs+100 ys+45 gSettingsSubLocal, Change
+Gui, Settings:Add, Button, w75 xs+185 ys+45 gSettingsSubLocalDefault, Default
+
+;Start of about section
+Gui, Settings:Font, s12 cBlack, Arial
+Gui, Settings:Add, Text, xm yp+75 section, About
+Gui, Settings:Font, s18, Arial
+Gui, Settings:Add, Text, xs+100 ys-5, %programName%
+Gui, Settings:Font, s9 c%guiColor1%, Arial
+Gui, Settings:Add, Text, xs+100 ys+25 w400, Version: %scriptVersion%
+Gui, Settings:Add, Text, xs+100 yp+18 w400, %programName% was created by Michael Pfammatter and is copyright by Wright Heerema | Architects in 2014
 Gui, Settings:Show
+DebugMe("SettingsSub")
 return
 
 SettingsGuiEscape:
@@ -464,6 +523,16 @@ GuiControl,, worksetCheck, %worksetDefault%
 workset := worksetDefault
 return
 
+SettingsSubExplore:
+;Allows user to set whether an explorer window will be opened to the project folder after the model is launched.
+DebugMe("SettingsSubExplore")
+iniLocal.Settings.ExploreDefault := !exploreDefault
+iniLocal.Save()
+exploreDefault := iniLocal.Settings.ExploreDefault
+GuiControl,, exploreCheck, %exploreDefault%
+exploreLaunch := exploreDefault
+Return
+
 SettingsSubStartup:
 DebugMe("Settings Startup Check")
 IfNotExist, %LinkFile%
@@ -471,7 +540,7 @@ IfNotExist, %LinkFile%
 	FileCreateShortcut, %A_ScriptFullPath%, %LinkFile% 
 	If ErrorLevel
 	{
-		MsgBox, 1, %programName%, There was a problem creating a shortcut in your startup folder, %A_Startup%.  Please contact %bimGuy% for additional information.
+		MsgBox, 16, %programName%, There was a problem creating a shortcut in your startup folder, %A_Startup%.  Please contact %bimGuy% for additional information.
 	}
 }
 Else
@@ -488,14 +557,41 @@ Else
 	startupExist := 0
 GuiControl,, startupCheck, %startupExist%
 Return
+
+SettingsSubLocal:
+;Allows user to set location where local files will be saved. It also give the option to set it back to the default location.
+FileSelectFolder, selectedFolder, , 3, Choose a location for your local files to reside:
+If ErrorLevel
+	Return
+localFolder := selectedFolder
+iniLocal.Settings.LocalFolder := localFolder
+iniLocal.save()
+GuiControl, , localLocation, %localFolder%
+Return
+
+SettingsSubLocalDefault:
+IfEqual, localFolder, %A_MyDocuments%\Revit
+	MsgBox, 16, %programName%, The local file save location is currently set to the default location.
+Else
+{
+	MsgBox, 17, %programName%, This will return the local file save location to the default setting.  Are you sure you would like to proceed?
+	IfMsgBox, Cancel
+		Return
+	localFolder = %A_MyDocuments%\Revit
+	iniLocal.Settings.LocalFolder := localFolder
+	iniLocal.save()
+	GuiControl, , localLocation, %localFolder%
+}
+Return
+
+
 ; ### End of Settings Menu ###
 
 
 
 ; ### Create the Help Menu ###
 HelpSub:
-MsgBox, Help is coming soon...
-TrayOpen()
+Run http://192.168.1.8/portal/page/66-wha-revit-launcher-help
 return
 ; ### End of Help Menu ###
 
@@ -513,10 +609,9 @@ pCentral := iniCentral [projectID].Central
 IfNotExist, %pCentral% ;Check if project is setup correctly
 	{
 		MsgBox, 16, Launcher Error, There is an issue locating the project associated with %projectID%.`nPlease see your friendly BIM manager for additional information.`n`nHave a nice day!
-		TrayOpen()
+		ReloadMe()
 	}
 revitUser = %A_Username% ;Users computer username
-localFolder = %A_MyDocuments%\Revit ;Users folder where centrals will be saved
 projectFolder = %localFolder%\%projectID% %pNameShort% ;Project folder name
 localFile = %projectID% %pNameShort% LOCAL %revitUser% ;Local file name no extension
 localPath = %projectFolder%\%localFile%.rvt ;Local file name & path
@@ -588,6 +683,40 @@ If !detach
 	LocalBackup:
 	DebugMe("LocalBackup")
 	;Create a backup of the last local created
+	IfExist, %projectFolder%\%localFile%.4.rvt
+	{
+		FileGetTime, backupFour, %projectFolder%\%localFile%.4.rvt, C
+		weekTwo := A_Now
+		weekTwo += -14, D
+		If backupFour > weekTwo
+		{
+			FileMove, %projectFolder%\%localFile%.3.rvt, %projectFolder%\%localFile%.4.rvt
+		}
+	}
+	Else
+	{
+		IfExist, %projectFolder%\%localFile%.3.rvt
+			FileMove, %projectFolder%\%localFile%.3.rvt, %projectFolder%\%localFile%.4.rvt
+	}
+	IfExist, %projectFolder%\%localFile%.3.rvt
+	{
+		FileGetTime, backupThree, %projectFolder%\%localFile%.3.rvt, C
+		weekOne := A_Now
+		weekOne += -7, D
+		If backupThree > weekOne
+		{
+			FileMove, %projectFolder%\%localFile%.2.rvt, %projectFolder%\%localFile%.3.rvt
+			FileSetTime,, %projectFolder%\%localFile%.3.rvt, C
+		}
+	}
+	Else
+	{
+		IfExist, %projectFolder%\%localFile%.2.rvt
+		{
+			FileMove, %projectFolder%\%localFile%.2.rvt, %projectFolder%\%localFile%.3.rvt
+			FileSetTime,, %projectFolder%\%localFile%.3.rvt, C
+		}
+	}
 	IfExist, %projectFolder%\%localFile%.1.rvt ;backup of a backup
 		fileMove, %projectFolder%\%localFile%.1.rvt, %projectFolder%\%localFile%.2.rvt, 1
 	IfExist, %localPath% ;backup of the local
@@ -595,7 +724,7 @@ If !detach
 
 	DebugMe("LocalCreate")
 	FileCopy, %pCentral%, %localPath%, 1
-	if ErrorLevel ;Check to make sure everything copied alright
+	if ErrorLevel ;Check to make sure everything copied correctly
 	{
 		MsgBox, 16, Local Creation Error, The local file could not be copied to your computer.  Please see your BIM manager for additional information.
 		ExitApp
@@ -622,7 +751,12 @@ Else
 }
 WinActivate
 Send ^o
-WinWait, Open
+WinWait, Open,, 15
+If ErrorLevel
+{
+	MsgBox, 48, %programName%, There seems to be an issue launching your project. Check Revit for any opened dailog boxes and try launching again.`n`nThanks.
+	ReloadMe("noshow")
+}
 Sleep 300
 WinGet, openID, ID, Open
 ControlGet, fileHwnd, Hwnd,, Edit1, ahk_id %openID%
@@ -676,6 +810,9 @@ Else
 	Gui, Launch:Destroy
 }
 WinActivate, ^%revitTitle%
+; Set detach back to global setting
+detach := iniLocal.Settings.Detach
+ReloadMe("noshow")
 Return
 
 LaunchSplash:
@@ -735,15 +872,18 @@ trayOpen() ;open the tray menu in the lower right corner
 	Return True
 }
 
-ReloadMe()
+ReloadMe(sx = "show")
 {
 	Global
 	Menu, Tray, DeleteAll
 	Gui, Destroy
 	GoSub, TrayMenu
-	CoordMode, Menu, Screen
-	Menu, Tray, Show, %mouseX%, %mouseY%
-	CoordMode, Menu, Window
+	If !(sx = "noshow")
+	{
+		CoordMode, Menu, Screen
+		Menu, Tray, Show, %mouseX%, %mouseY%
+		CoordMode, Menu, Window
+	}
 	Exit
 	Return True
 }
