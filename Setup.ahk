@@ -16,7 +16,7 @@ If !A_IsAdmin
 }
 
 FileGetVersion, newVersion, %programName%.exe
-versionSuffix := " beta2"
+versionSuffix := ""
 installFolder = %A_ProgramFiles%\%programName%%versionSuffix%
 installFullPath = %installFolder%\%programName%.exe
 ; ListVars
