@@ -70,16 +70,17 @@ If (!iniLocal.Settings.iniPathCentral) ;Check if settings file is good
 iniPathCentral := iniLocal.Settings.iniPathCentral
 iniCentral := class_EasyIni(iniPathCentral)
 
-; Check if user can write to the global list of projects "iniPathCentral"
-FileGetAttrib, iniCentralAttrib, %iniPathCentral%
-IfInString, iniCentralAttrib, R
-	iniCentralEdit := 0
-Else
-{
-	iniCentralEdit := 1
-	SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
-	globalLog = %iniCentralDir%\%iniCentralName%.log
-}
+
+;~ FileGetAttrib, iniCentralAttrib, %iniPathCentral%
+;~ IfInString, iniCentralAttrib, R
+	;~ iniCentralEdit := 0
+;~ Else
+;~ {
+	;~ iniCentralEdit := 1
+	;~ SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
+	;~ globalLog = %iniCentralDir%\%iniCentralName%.log
+;~ }
+
 
 ; Get some default settings
 detach := iniLocal.Settings.Detach
@@ -142,6 +143,22 @@ Else ;add a setting with the default value to the ini file
 }
 logMe("Program", "Opened", lastExit)
 ; Create the main tray menu that will be the main interface
+
+; Check if user can write to the global list of projects "iniPathCentral"
+SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
+globalLog = %iniCentralDir%\%iniCentralName%.log
+msgbox %globalLog%
+If LogMe("ManageList", "Write check")
+{
+	iniCentralEdit := 0
+	LogMe("Program", "Write check", "Fail")
+}
+Else
+{
+	iniCentralEdit := 1
+	LogMe("Program", "Write check", "Success")
+}
+
 GoSub, TrayMenu
 
 OnExit, ExitSub
@@ -662,6 +679,13 @@ Gui, Settings:Font, s9 c%guiColor1%, Arial
 Gui, Settings:Add, Text, xs+100 ys+25 w400 vlocalLocation, %localFolder%
 Gui, Settings:Add, Button, w75 xs+100 ys+45 gSettingsSubLocal, Change
 Gui, Settings:Add, Button, w75 xs+185 ys+45 gSettingsSubLocalDefault, Default
+Gui, Settings:Font, s12 cBlack, Arial
+Gui, Settings:Add, Text, xm yp+50 section,
+Gui, Settings:Font, s18, Arial
+Gui, Settings:Add, Text, xs+100 ys-5, Log File
+Gui, Settings:Font, s9 c%guiColor1%, Arial
+Gui, Settings:Add, Text, xs+100 ys+25 w400 vlogLocation, %localLog%
+Gui, Settings:Add, Button, w75 xs+100 ys+45 gSettingsSubLog, View
 
 ;Start of about section
 Gui, Settings:Font, s12 cBlack, Arial
@@ -778,6 +802,10 @@ Else
 	GuiControl, , localLocation, %localFolder%
 	LogMe("Settings", "localLocation", localFolder, "Default")
 }
+Return
+
+SettingsSubLog:
+Run, %localLog%
 Return
 ; ### End of Settings Menu ###
 
