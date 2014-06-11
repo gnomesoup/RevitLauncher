@@ -70,18 +70,6 @@ If (!iniLocal.Settings.iniPathCentral) ;Check if settings file is good
 iniPathCentral := iniLocal.Settings.iniPathCentral
 iniCentral := class_EasyIni(iniPathCentral)
 
-
-;~ FileGetAttrib, iniCentralAttrib, %iniPathCentral%
-;~ IfInString, iniCentralAttrib, R
-	;~ iniCentralEdit := 0
-;~ Else
-;~ {
-	;~ iniCentralEdit := 1
-	;~ SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
-	;~ globalLog = %iniCentralDir%\%iniCentralName%.log
-;~ }
-
-
 ; Get some default settings
 detach := iniLocal.Settings.Detach
 workset := iniLocal.Settings.Workset
@@ -147,7 +135,6 @@ logMe("Program", "Opened", lastExit)
 ; Check if user can write to the global list of projects "iniPathCentral"
 SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
 globalLog = %iniCentralDir%\%iniCentralName%.log
-msgbox %globalLog%
 If LogMe("ManageList", "Write check")
 {
 	iniCentralEdit := 0
@@ -1523,7 +1510,8 @@ LogMe(category, params*)
 	FileAppend, %logLine%`n, %logFile%
 	If (category = "ManageList")
 	{
-		FileAppend, %logLine%,%A_Username%`n, %globalLog%
+		MsgBox, Writing to globallog %globalLog%
+		FileAppend, % logLine . ",user:" . A_Username . "`n", %globalLog%
 	}
 	If ErrorLevel
 		Return False
