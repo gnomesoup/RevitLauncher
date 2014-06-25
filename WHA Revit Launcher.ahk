@@ -17,9 +17,15 @@ SetTitleMatchMode, RegEx ;Allows for less precise window finding
 ; Set the name of the program. This should be the same as the named exe file
 ; I don't grab this using A_ variables in case a user changes the filename
 If A_IsCompiled
+{
 	programName = WHA Revit Launcher
+	FileGetVersion, scriptVersion, %A_ScriptFullPath%
+}
 Else
+{
 	programName = Revit Launcher Dev
+	scriptVersion = LaunchDev
+}
 
 ; Location where icons and images are kept
 supportFolder = %A_ScriptDir%\Support
@@ -130,12 +136,11 @@ Else ;add a setting with the default value to the ini file
 	iniLocal.save()
 }
 logMe("Program", "Opened", lastExit)
-; Create the main tray menu that will be the main interface
 
 ; Check if user can write to the global list of projects "iniPathCentral"
 SplitPath, iniPathCentral, , iniCentralDir, , iniCentralName
 globalLog = %iniCentralDir%\%iniCentralName%.log
-If LogMe("ManageList", "Write check")
+If !LogMe("ManageList", "Write check")
 {
 	iniCentralEdit := 0
 	LogMe("Program", "Write check", "Fail")
@@ -149,7 +154,6 @@ Else
 GoSub, TrayMenu
 
 OnExit, ExitSub
-
 ; This is all that is done when the program is started
 ; Any additional features will need to be initialized by the user
 Return
@@ -199,9 +203,10 @@ Loop, %favList0%
 	if instr(favSection, "Favorite")
 	{
 		favN += 1
+		; Assign the project ID from the local ini file
 		fav%favN% := iniLocal [favSection].ProjectID
-		Fav%favN%Name := iniLocal [favSection].Name
-		favVersion%favN% := iniCentral [fav%favN%].Version
+		; Assign the project name from the local ini file
+		fav%favN%Name := iniLocal [favSection].Name
 	}
 }
 	
@@ -225,15 +230,27 @@ Else
 	Menu, tray, icon, Quick Launch Add/Remove, %supportFolder%\star.ico
 	Loop, % FavN ;search through list of favorites and make menu items for them
 	{
-		favTitle := fav%A_Index%Name
-		favIcon := favVersion%A_Index%
-		Menu, tray, Add, %favTitle%, favSub
-		If detach
-			Menu, tray, Icon, %favTitle%, %supportFolder%\detach.ico, 1, 16
-		Else
-			IfExist,%supportFolder%\Revit%favIcon%file.ico
-				Menu, tray, Icon, %favTitle%, %supportFolder%\Revit%favIcon%file.ico, 1, 16
-		; MsgBox, Added %A_Index%
+		; Get the current project version from the Global Project List
+		favVersion%favN% := iniCentral [fav%A_Index%].Version
+		; Check if project still exists
+		if !(favVersion%favN%)
+		{
+			MsgBox, % "Uh oh, The project:`n`n" . fav%A_Index%Name . "`n`ncould not be found in the Global Project List. It will be removed from your quick launch menu.`n`nYou may want to try adding it again. Please see " . bimGuy . " should this problem persist."
+			iniLocal.DeleteSection(favList%A_Index%)
+			iniLocal.Save()
+			LogMe("Favorite", "Remove", favList%A_Index%, "No longer in global list")
+		}
+		else
+		{
+			favTitle := fav%A_Index%Name
+			favIcon := favVersion%A_Index%
+			Menu, tray, Add, %favTitle%, favSub
+			If detach
+				Menu, tray, Icon, %favTitle%, %supportFolder%\detach.ico, 1, 16
+			Else
+				IfExist,%supportFolder%\Revit%favIcon%file.ico
+					Menu, tray, Icon, %favTitle%, %supportFolder%\Revit%favIcon%file.ico, 1, 16
+		}
 	}
 }
 Menu, tray, Add
@@ -246,7 +263,7 @@ If workset
 Menu, tray, Add
 Menu, tray, Add, Settings, SettingsSub
 If iniCentralEdit
-	Menu, tray, Add, Manage Project List, ManageListSub
+	Menu, tray, Add, Manage Global Project List, ManageListSub
 Menu, tray, Icon, Settings, %supportFolder%\settings.ico
 Menu, tray, Add, %programName% Help, HelpSub
 Menu, tray, Add, Exit, TrayExit
@@ -382,11 +399,15 @@ Return
 FindLaunchList:
 If A_GuiEvent = I 
 {
-	GuiControl, FindLaunch:Enable, Button1
+	If !detach
+		GuiControl, FindLaunch:Enable, Button1
 	GuiControl, FindLaunch:Enable, Button2
 }
 If A_GuiEvent = DoubleClick
-	GoSub, FindLaunchFind
+	if detach
+		GoSub, FindLaunchDetach
+	else
+		GoSub, FindLaunchFind
 Return
 
 FindLaunchDetach:
@@ -455,14 +476,14 @@ StringSplit, centralSections, centralSections, `n
 ; Create the add project menu
 Gui, AddProject:New,, %programName%
 Gui, AddProject:Font, s18 , Arial
-Gui, AddProject:Add, Text, center w500, Select a project to add to your project list:
+Gui, AddProject:Add, Text, center w500, Add a project to your Quick Launch Menu:
 Gui, AddProject:Font, s10 , Arial
 Gui, AddProject:Add, ListView, AltSubmit r10 w500 gAddProjectList -Multi, Number|Name|Version|LaunchID
 ; Add all of the projects to the listview
 GoSub, UserListView
 
 Gui, AddProject:Font, s10 c%guiColor1%, Arial
-Gui, AddProject:Add, Text, w500 center yp+230, Choose a project and it will be added to your "Quick Launch" menu.`nA local file will be created and opened using the correct version of Revit.`nDon't see your project listed? Contact %bimGuy%.
+Gui, AddProject:Add, Text, w500 center yp+230, Choose a project and it will be added to your "Quick Launch" menu.`nDon't see your project listed? Contact %bimGuy%.
 Gui, AddProject:Font, s18 cBlack, Arial
 Gui, AddProject:Add, Button,  w150 yp+60 xp+75 gAddProjectAdd, &Add to list
 Gui, AddProject:Add, Button,  wp xp+200 Default gAddProjectGuiClose, &Cancel
@@ -620,7 +641,6 @@ IfExist %linkFile%
 	startupExist := 1
 Else
 	startupExist := 0
-FileGetVersion, scriptVersion, %A_ScriptFullPath%
 Gui, Settings:New,, %programName%
 Gui, Settings:Font, s24 cBlack, Arial
 Gui, Settings:Add, Text, w500, %programName% Settings:
@@ -1132,7 +1152,8 @@ Return
 
 ; ### Create the Help Menu ###
 HelpSub:
-Run http://192.168.1.8/portal/page/66-wha-revit-launcher-help
+helpFile := "https://wharchs.sharepoint.com/_layouts/15/start.aspx#/BIM%20Standards/WHA%20Revit%20Launcher.aspx"
+Run, %helpFile%
 return
 ; ### End of Help Menu ###
 
@@ -1356,15 +1377,19 @@ Else If detach
 {
 	LogMe("Launcher", "detach", projectID, fName)
 	Sleep 300
-	WinWait, Detach Model from Central,, 60
-	ControlClick, Button1, Detach Model from Central,, L
+	WinWait, Detach Model from Central,, 30
+	Sleep 300
+	If !ErrorLevel
+		ControlClick, Button1, Detach Model from Central,, L
 	Gui, Launch:Destroy
 }
 Else
 {
 	LogMe("Launcher", "standard", projectID, fName)
-	WinWait, Copied Central Model,, 60
-	ControlClick, Button1, Copied Central Model,, L, 2, NA
+	WinWait, Copied Central Model,, 30
+	Sleep 300
+	If !ErrorLevel
+		ControlClick, Button1, Copied Central Model,, L, 2, NA
 	Gui, Launch:Destroy
 }
 WinActivate, ^%revitTitle%
@@ -1497,9 +1522,10 @@ LogMe(category, params*)
 {
 	global localLog
 	global globalLog
+	global scriptVersion
 	FormatTime, yearWeek, , yWeek
 	FormatTime, logTime, , yyyy-MM-dd HH:mm:ss
-	sep := ","
+	sep := ", "
 	logLine := logTime . sep . category
 
 	for index, param in params
@@ -1510,12 +1536,11 @@ LogMe(category, params*)
 	FileAppend, %logLine%`n, %logFile%
 	If (category = "ManageList")
 	{
-		MsgBox, Writing to globallog %globalLog%
-		FileAppend, % logLine . ",user:" . A_Username . "`n", %globalLog%
+		FileAppend, % logLine . ", user:" . A_Username . ", version:" . scriptVersion . "`n", %globalLog%
 	}
 	If ErrorLevel
-		Return False
+		Return 0
 	Else
-		Return True
+		Return 1
 }
 Return
