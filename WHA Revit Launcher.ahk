@@ -151,16 +151,42 @@ Else
 	LogMe("Program", "Write check", "Success")
 }
 
-GoSub, TrayMenu
+noNetwork := 0
+networkLogged := 0
+SetTimer, NetworkCheck, 5000
+GoSub, NetworkCheck
+if !noNetwork
+	GoSub, TrayMenu
 
 OnExit, ExitSub
 ; This is all that is done when the program is started
 ; Any additional features will need to be initialized by the user
 Return
+
+; Check if the network is available
+NetworkCheck:
+IfNotExist, %iniPathCentral%
+{
+	noNetwork := 1
+	if !networkLogged
+	{
+		networkLogged := LogMe("Program", "Network Check", "Fail")
+		ReloadMe("noshow")
+	}
+}
+IfExist, %iniPathCentral%
+{
+	if noNetwork
+	{
+		noNetwork := !logMe("Program", "Network Check", "Success")
+		ReloadMe("noshow")
+	}
+	noNetwork := 0
+	return
+}
+return
+
 ; ### End of Set Variables ###
-
-
-
 
 
 
@@ -215,9 +241,8 @@ Menu, tray, NoStandard ;Get rid of default menu items
 Menu, tray, Icon,  %supportFolder%\wha.ico
 Menu, tray, Tip, Wright Heerema | Architects`nRevit Launcher
 ;Give different menu options if the S drive is not available
-IfNotExist %iniPathCentral%
+If noNetwork
 {
-	Menu, tray, Icon,  %supportFolder%\alert.ico
 	Menu, tray, Add, Error! Central Project List Not Found, TrayReset
 	Menu, tray, Icon, Error! Central Project List Not Found, %supportFolder%\alert.ico
 }
@@ -231,9 +256,9 @@ Else
 	Loop, % FavN ;search through list of favorites and make menu items for them
 	{
 		; Get the current project version from the Global Project List
-		favVersion%favN% := iniCentral [fav%A_Index%].Version
+		favVersion%A_Index% := iniCentral [fav%A_Index%].Version
 		; Check if project still exists
-		if !(favVersion%favN%)
+		if !(favVersion%A_Index%)
 		{
 			MsgBox, % "Uh oh, The project:`n`n" . fav%A_Index%Name . "`n`ncould not be found in the Global Project List. It will be removed from your quick launch menu.`n`nYou may want to try adding it again. Please see " . bimGuy . " should this problem persist."
 			iniLocal.DeleteSection(favList%A_Index%)
@@ -245,11 +270,10 @@ Else
 			favTitle := fav%A_Index%Name
 			favIcon := favVersion%A_Index%
 			Menu, tray, Add, %favTitle%, favSub
+			IfExist, %supportFolder%\Revit%favIcon%file.ico
+				Menu, tray, Icon, %favTitle%, %supportFolder%\Revit%favIcon%file.ico, 1, 16
 			If detach
 				Menu, tray, Icon, %favTitle%, %supportFolder%\detach.ico, 1, 16
-			Else
-				IfExist,%supportFolder%\Revit%favIcon%file.ico
-					Menu, tray, Icon, %favTitle%, %supportFolder%\Revit%favIcon%file.ico, 1, 16
 		}
 	}
 }
@@ -266,6 +290,11 @@ If iniCentralEdit
 	Menu, tray, Add, Manage Global Project List, ManageListSub
 Menu, tray, Icon, Settings, %supportFolder%\settings.ico
 Menu, tray, Add, %programName% Help, HelpSub
+If !A_IsCompiled
+{
+	Menu, tray, Add, ListVars, ListVarsSub
+	Menu, tray, Add, KeyHistory, KeyHistorySub
+}
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
 return
@@ -304,6 +333,14 @@ workset := MenuCheck(workset, "Specify Worksets")
 ; iniLocal.Settings.Workset := workset
 ; iniLocal.Save()
 TrayOpen()
+return
+
+ListVarsSub:
+ListVars
+return
+
+KeyHistorySub:
+KeyHistory
 return
 
 TrayExit:
@@ -1325,12 +1362,20 @@ Else
 }
 WinActivate
 Send ^o
+WinWait, Project Not Saved Recently,, 1
+if !Errorlevel
+{
+	Gui, Launch:Destroy
+	MsgBox, 48, %programName%, Please save your current project/family before launching a new one.
+	LogMe("Launcher", "Error", "Project Not Saved Dialog", projectID, revitPath, revitTitle, localPath)
+	ReloadMe("noshow")
+}
 WinWait, Open,, 15
 If ErrorLevel
 {
 	Gui, Launch:Destroy
 	MsgBox, 48, %programName%, There seems to be an issue launching your project. Check Revit for any opened dailog boxes and try launching again.`n`nThanks.
-	LogMe("Launcher", "Error", "OpenWait", revitPath, revitTitle, projectID, localPath)
+	LogMe("Launcher", "Error", "OpenWait", projectID, revitPath, revitTitle, localPath)
 	ReloadMe("noshow")
 }
 Sleep 300
