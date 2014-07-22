@@ -273,7 +273,7 @@ Else
 			IfExist, %supportFolder%\Revit%favIcon%file.ico
 				Menu, tray, Icon, %favTitle%, %supportFolder%\Revit%favIcon%file.ico, 1, 16
 			If detach
-				Menu, tray, Icon, %favTitle%, %supportFolder%\detach.ico, 1, 16
+				Menu, tray, Icon, %favTitle%, %supportFolder%\detach%favIcon%.ico, 1, 16
 		}
 	}
 }
@@ -1254,8 +1254,12 @@ IfNotExist, %revitPath%
 }
 
 FindMonitor: 
-;Check for a Worksharing Monitor for the right version of Revit
-monitorPath = %A_ProgramFiles% (x86)\Autodesk\Worksharing Monitor for Autodesk Revit %pVersion%\WorksharingMonitor.exe
+;	Check for a Worksharing Monitor for the right version of Revit
+; Because Workingshing monitor becomes 64bit with version 2015, we have to change folder locations
+; ? in variable assignment is a Ternary operator to avoid complicated if/else statement
+mon64 := pVersion >= 2015 ? "" : " (x86)"
+adesk := pVersion >= 2015 ? "" : " Autodesk"
+monitorPath = %A_ProgramFiles%%mon64%\Autodesk\Worksharing Monitor for%adesk% Revit %pVersion%\WorksharingMonitor.exe
 monitorTitle = Worksharing Monitor for Autodesk Revit %pVersion%
 IfNotExist, %monitorPath%
 {
@@ -1263,7 +1267,6 @@ IfNotExist, %monitorPath%
 	monitorPath =
 	LogMe("Launcher", "Error", "FindMonitor", monitorPath, projectID, pVersion)
 }
-
 DebugMe("LaunchSplash")
 Gosub, LaunchSplash
 DebugMe("exploreLaunch")
@@ -1347,8 +1350,7 @@ launchStatus = Launching Revit %pVersion%
 GuiControl,, LaunchText, %launchStatus%
 ;Open Revit with the correct version
 If monitorPath ;Open the worksharing monitor if it exists
-	IfWinNotExist, %monitorTitle%
-		Run, %monitorPath%
+	Run, %monitorPath%
 IfWinExist, ^%revitTitle% ;Check to see if Revit is already running
 {
 	WinActivate
@@ -1392,9 +1394,10 @@ If workset
 {
 	SplitPath, fName, fName, fPath
 	; MsgBox, 1, Workset Flow, Workset: %workset% File: %fPath%
+	Sleep 300
 	Control, EditPaste, %fPath%, , ahk_id %fileHwnd%
 	ControlClick, Button1, Open,, L, 2, NA
-	Sleep 600
+	Sleep 300
 	ControlSend, SysListView321, %fName%, Open
 	ControlSend, Button1, {Down 6}{Enter}, Open
 }
@@ -1415,7 +1418,7 @@ If workset
 	WinWait, Opening Worksets,, 60
 	Gui, Launch:Destroy
 	Sleep 200
-	WinWait, Copied Central Model,, 60
+	WinWait, Copied Central Model,, 30
 	ControlClick, Button1, Copied Central Model,, L, 2, NA
 }
 Else If detach
@@ -1423,7 +1426,6 @@ Else If detach
 	LogMe("Launcher", "detach", projectID, fName)
 	Sleep 300
 	WinWait, Detach Model from Central,, 30
-	Sleep 300
 	If !ErrorLevel
 		ControlClick, Button1, Detach Model from Central,, L
 	Gui, Launch:Destroy
@@ -1458,11 +1460,18 @@ Gui, Launch:Font, cBlack s36, Arial
 Gui, Launch:Add, Text,yp+150 center w700 vLaunchText, Launching...
 Gui, Launch:Font, c%guiColor1% s18, Arial
 Gui, Launch:Add, Text,yp+70 center w700, %pNumber% %pName%
-If detach
+Gui, Launch:Font, c%guiColor2% s24, Arial
+if detach or workset
 {
-	Gui, Launch:Font, c%guiColor2% s24, Arial
-	Gui, Launch:Add, Text, yp+70 w700 center, Detached
+	Gui, Launch:Add, Text, yp+70 w700 vlaunchSub center,
+	if detach & workset
+		GuiControl, Launch:Text, launchSub, Detach and Specify
+	else if workset
+		GuiControl, Launch:Text, launchSub, Specify Worksets
+	else
+		GuiControl, Launch:Text, launchSub, Detach
 }
+
 Gui, Launch:Show
 return
 ; ### End of Main Routine ###
