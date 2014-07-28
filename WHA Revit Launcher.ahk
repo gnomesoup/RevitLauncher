@@ -493,12 +493,17 @@ Return
 ; Menu that allows users to add or remove programs they frequent to the tray menu
 ; First we simply ask if they want to add to the list or remove from the list
 AddRemove:
+guiTitle := "What would you like to do?"
+guiWidth := 550
+bWidth := (guiWidth - 10) / 2
+bLoc := bWidth + 10
+tFont := GetFontMax(guiTitle, guiWidth)
 Gui, AddRemove:New,, %programName%
-Gui, AddRemove:Font, s24, Arial
-Gui, AddRemove:Add, Text, center w650, What would you like to do?
+Gui, AddRemove:Font, %tFont%, Arial
+Gui, AddRemove:Add, Text, center w%guiWidth%, %guiTitle%
 Gui, AddRemove:Font, s18, Arial
-Gui, AddRemove:Add, Button, Default w300 gAddProject, &Add a Project
-Gui, AddRemove:Add, Button, wp xp+350 gRemoveProject, &Remove a Project
+Gui, AddRemove:Add, Button, Default w%bWidth% gAddProject, &Add a Project
+Gui, AddRemove:Add, Button, wp xp+%bLoc% gRemoveProject, &Remove a Project
 Gui, AddRemove:Show
 return
 
@@ -511,9 +516,14 @@ centralSections := iniCentral.GetSections(,"C")
 ; Create an array of the projects for looping
 StringSplit, centralSections, centralSections, `n
 ; Create the add project menu
+guiTitle := "Add a project to your Quick Launch Menu:"
+guiWidth := 500
+bWidth := (guiWidth - 10) / 2
+bLoc := bWidth + 10
+tFont := GetFontMax(guiTitle, guiWidth)
 Gui, AddProject:New,, %programName%
-Gui, AddProject:Font, s18 , Arial
-Gui, AddProject:Add, Text, center w500, Add a project to your Quick Launch Menu:
+Gui, AddProject:Font, %tFont% , Arial
+Gui, AddProject:Add, Text, center w%guiWidth%, %guiTitle%
 Gui, AddProject:Font, s10 , Arial
 Gui, AddProject:Add, ListView, AltSubmit r10 w500 gAddProjectList -Multi, Number|Name|Version|LaunchID
 ; Add all of the projects to the listview
@@ -522,8 +532,8 @@ GoSub, UserListView
 Gui, AddProject:Font, s10 c%guiColor1%, Arial
 Gui, AddProject:Add, Text, w500 center yp+230, Choose a project and it will be added to your "Quick Launch" menu.`nDon't see your project listed? Contact %bimGuy%.
 Gui, AddProject:Font, s18 cBlack, Arial
-Gui, AddProject:Add, Button,  w150 yp+60 xp+75 gAddProjectAdd, &Add to list
-Gui, AddProject:Add, Button,  wp xp+200 Default gAddProjectGuiClose, &Cancel
+Gui, AddProject:Add, Button,  w%bWidth% yp+60 xm gAddProjectAdd, &Add to list
+Gui, AddProject:Add, Button,  wp xp+%bLoc% Default gAddProjectGuiClose, &Cancel
 GuiControl, Disable, &Add to list
 Gui, AddProject:Show
 ; Destroy the menu that asks if we want to add or remove
@@ -535,11 +545,16 @@ return
 ; Menu to remove a program from the Quick Launch list
 RemoveProject:
 ; Create the Remove from Quick Launch menu
+guiTitle := "Select a project to remove:"
+guiWidth := 500
+bWidth := (guiWidth - 10) / 2
+bLoc := bWidth + 10
+tFont := GetFontMax(guiTitle, guiWidth)
 Gui, RemoveProject:New,, %programName%
-Gui, RemoveProject:Font, s18, Arial
-Gui, RemoveProject:Add, Text, center w500, Select a project to remove:
+Gui, RemoveProject:Font, %tFont% , Arial
+Gui, RemoveProject:Add, Text, center w%guiWidth%, %guiTitle%
 Gui, RemoveProject:Font, s10, Arial
-Gui, RemoveProject:Add, ListView, AltSubmit r10 w500 gRemoveProjectList -Multi, Name|ID
+Gui, RemoveProject:Add, ListView, AltSubmit r10 w%guiWidth% gRemoveProjectList -Multi, Name|ID
 ; Add a list of all the projects in the Quick Launch list to the list view
 loop, %favList0%
 {
@@ -550,8 +565,8 @@ LV_ModifyCol(2, 0)
 Gui, RemoveProject:Font, s10 c%guiColor1%, Arial
 Gui, RemoveProject:Add, Text, w500 center yp+230, The selected project will be removed from your "Quick Launch" menu.
 Gui, RemoveProject:Font, s18 cBlack, Arial
-Gui, RemoveProject:Add, Button,  w250 yp+60 xp+25 gRemoveProjectRemove, &Remove from list
-Gui, RemoveProject:Add, Button,  w150 xp+300 Default gRemoveProjectGuiClose, &Cancel
+Gui, RemoveProject:Add, Button, w%bWidth% xm yp+60 gRemoveProjectRemove, &Remove from list
+Gui, RemoveProject:Add, Button,  w%bWidth% xp+%bLoc% Default gRemoveProjectGuiClose, &Cancel
 GuiControl, Disable, &Remove from list
 Gui, RemoveProject:Show
 ; Destroy the menu that asks if we want to add or remove
@@ -678,9 +693,15 @@ IfExist %linkFile%
 	startupExist := 1
 Else
 	startupExist := 0
+
+guiTitle := programName . " Settings:"
+guiWidth := 500
+bWidth := (guiWidth - 10) / 2
+bLoc := bWidth + 10
+tFont := GetFontMax(guiTitle, guiWidth)
 Gui, Settings:New,, %programName%
-Gui, Settings:Font, s24 cBlack, Arial
-Gui, Settings:Add, Text, w500, %programName% Settings:
+Gui, Settings:Font, %tFont% cBlack, Arial
+Gui, Settings:Add, Text, center w%guiWidth%, %guiTitle%
 
 ;Start of default settings section
 Gui, Settings:Font, s12, Arial
