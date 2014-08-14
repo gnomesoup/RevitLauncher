@@ -1473,12 +1473,12 @@ Gui, Launch:New
 If debug
 	Gui, Launch:-Caption ; AlwaysOnTop 
 Else
-	Gui, Launch:-Caption AlwaysOnTop 
+	Gui, Launch:-Caption
 Gui, Launch:Margin, 50, 50
 Gui, Launch:Color, DCDCDC
-Gui, Launch:Add, Picture, AltSubmit w700 h-1, %supportFolder%\WRIGHT-HEEREMA-logo.png
+whaLogo(700, "Launch")
 Gui, Launch:Font, cBlack s36, Arial
-Gui, Launch:Add, Text,yp+150 center w700 vLaunchText, Launching...
+Gui, Launch:Add, Text,xm yp+150 center w700 vLaunchText, Launching...
 Gui, Launch:Font, c%guiColor1% s18, Arial
 Gui, Launch:Add, Text,yp+70 center w700, %pNumber% %pName%
 Gui, Launch:Font, c%guiColor2% s24, Arial

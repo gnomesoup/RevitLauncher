@@ -11,8 +11,7 @@ programName = WHA Revit Launcher
 
 If !A_IsAdmin
 {
-	MsgBox, 16,, You do not have administrator privileges.`n`nTo install %programName%, please re-run Setup.exe with administrator privileges.
-	ExitApp
+	PrettyMsg("You do not have administrator privileges.`n`nTo install " . programName . ", please re-run Setup.exe with administrator privileges.", "exit")
 }
 
 FileGetVersion, newVersion, %programName%.exe
@@ -25,88 +24,104 @@ silent := 0
 If silent
 	GoSub, Install
 
-
-Gui, New
-Gui, Font, s22cBlack, Arial
-Gui, Add, Text, w500 center, Install %programName%
-Gui, Font, s10 c666666, Arial
-Gui, Add, Text, w500 center yp+35, Version: %newVersion%
-Gui, Font, s10 cBlack, Arial
-Gui, Add, Text, w500, This little program automates many of the tedious tasks`nthat come along with creating locals and detaching models in Revit
-Gui, Add, Text, w500, Nothing will be written to the registry, and no desktop icons will be added.`nA shortcut will be placed in the start menu.
-Gui, Add, Text, w500 vInstallText, By proceeding, %programName% will be installed in:
-Gui, Font, s14, Arial
-Gui, Add, Text, w500 vInstallText2, %installFolder%\
-Gui, Font, s18, Arial
-Gui, Add, Button, w150 xp+10 yp+100 default vInstallB, &Install
-Gui, Add, Button, w150 xp+165 vUninstallB, &Uninstall
-Gui, Add, Button, w150 xp+165, &Cancel
-Gui, Font, s10, Arial
-Gui, Add, Text, w500 xp-340 yp+75, %programName% was specifically developed for Wright Heerema | Architects`nby Michael Pfammatter
-GuiControl, Disable, UninstallB
+setupWidth := 450
+setupBcount := 3
+setupBwidth := (setupWidth - (15 * (setupBcount-1))) / setupBcount
+setupBloc := setupBwidth + 15
+Gui, Setup:New
+Gui, Setup:Font, s22cBlack, Arial
+Gui, Setup:Add, Text, xm w%setupWidth% center, Install %programName%
+Gui, Setup:Font, s10 c666666, Arial
+Gui, Setup:Add, Text, w%setupWidth% center yp+35, Version: %newVersion%
+Gui, Setup:Font, s10 cBlack, Arial
+Gui, Setup:Add, Text, w%setupWidth%, This little program automates many of the tedious tasks that come along with creating locals and detaching models in Revit. 
+Gui, Setup:Add, Text, w%setupWidth%, This program writes a setting to your registry in order to allow right click creation of a Dated Folder. A shortcut will also be placed in the start menu.
+Gui, Setup:Add, Text, w%setupWidth% vInstallText, By proceeding, %programName% will be installed in:
+Gui, Setup:Font, s14, Arial
+Gui, Setup:Add, Text, w%setupWidth% vInstallText2, %installFolder%\
+Gui, Setup:Font, s18, Arial
+Gui, Setup:Add, Button, w%setupBwidth% xm yp+100 default vInstallB, &Install
+Gui, Setup:Add, Button, w%setupBwidth% xp+%setupBloc% vUninstallB, &Uninstall
+Gui, Setup:Add, Button, w%setupBwidth% xp+%setupBloc%, &Cancel
+Gui, Setup:Font, s10, Arial
+Gui, Setup:Add, Text, w%setupWidth% xm yp+75, %programName% was specifically developed by Michael Pfammatter for:
+whaLogo(setupWidth, "Setup")
+Gui, Setup:Font, s10, Arial
+GuiControl, Setup:Disable, UninstallB
 IfExist, %installFullPath%
 {
 	FileGetVersion, oldVersion, %installFullPath%
 	; oldVersion = 0.0.1.0
 	If oldVersion >= %newVersion%
 	{
-		GuiControl, Disable, InstallB
-		GuiControl, Enable, UninstallB
-		GuiControl, +Default, UninstallB
-		GuiControl, Text, InstallText, Congratulations!
-		GuiControl, Text, InstallText2, Version %oldVersion% is already installed on your device.
+		GuiControl, Setup:Disable, InstallB
+		GuiControl, Setup:Enable, UninstallB
+		GuiControl, Setup:+Default, UninstallB
+		GuiControl, Setup:Text, InstallText, Congratulations!
+		GuiControl, Setup:Text, InstallText2, Version %oldVersion% is already installed on your device.
 	}
 	Else
 	{
-		GuiControl, Text, InstallText, By proceeding %programName% will be upgrade from:
-		GuiControl, Text, InstallText2, Version %oldVersion% to Version %newVersion%
-		GuiControl, Text, InstallB, &Upgrade
-		GuiControl, Enable, UninstallB
+		GuiControl, Setup:Text, InstallText, By proceeding %programName% will be upgrade from:
+		GuiControl, Setup:Text, InstallText2, Version %oldVersion% to Version %newVersion%
+		GuiControl, Setup:Text, InstallB, &Upgrade
+		GuiControl, Setup:Enable, UninstallB
 		upgrade := 1
 	}
 	
 }
 
 
-Gui, Show
+Gui, Setup:Show
 Return
 
-GuiClose:
-GuiEscape:
-ButtonCancel:
+SetupGuiClose:
+SetupGuiEscape:
+SetupButtonCancel:
 ExitApp
 
-ButtonInstall:
-; MsgBox, %A_ScriptDir% to %installFolder%`n`n%A_StartMenuCommon%
-MsgBox, 33,, Proceed with installing %programName%?
+SetupButtonInstall:
+PrettyMsg("Proceed with installing " . programName . "?", "question")
 IfMsgBox Cancel
 	Return
-Gui, Destroy
+Gui, Setup:Destroy
 Install:
 FileCopyDir, %A_ScriptDir%, %installFolder%, 1
 If ErrorLevel
 {
-	MsgBox, 16,, There was an issue installing %programName% to %installFolder%. Please see your BIM Coordinator.
-	ExitApp
+	PrettyMsg("There was an issue installing " . programName . " to " . installFolder . ". Please see your BIM Coordinator.", "exit")
 }
 IfNotExist, %A_StartMenuCommon%\%programName%%versionSuffix%.lnk
+{
 	FileCreateShortcut, %installFullPath%, %A_StartMenuCommon%\%programName%%versionSuffix%.lnk
 	If ErrorLevel
 		shortcutMessage = `n`nA valid shortcut could not be create in the Start Menu. Go to %installFolder% to locate the program.
-MsgBox, 1,, Congratulations! %programName% was successfully installed.%shortcutMessage%
+}
+
+; Write Dated Folder values to registry
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Icon, "%installFolder%\Support\wha.ico"
+addError := ErrorLevel
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb, WHADatedFolder
+addError += ErrorLevel
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Position, Bottom
+addError += ErrorLevel
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command,, "%installFolder%\Dated Folder Creator.exe" "`%v"
+addError += ErrorLevel
+	
+PrettyMsg(programName . " was successfully installed." . shortcutMessage)
 ExitApp
 
-ButtonUninstall:
+SetupButtonUninstall:
 folderCount := 0
 fileCount := 0
-MsgBox, 33,, Are you sure you would like to Uninstall %programName%?
+PrettyMsg("Are you sure you would like to Uninstall %programName%?", "question")
 IfMsgBox Cancel
 	Return
-Gui, Destroy
+Gui, Setup:Destroy
 ; Remove the main install directory
 FileRemoveDir, %installFolder%, 1
 If ErrorLevel
-	MsgBox, The Program could not be uninstalled!
+	PrettyMsg("The Program could not be uninstalled!, Please see your BIM Coordinator.")
 Else
 	folderCount += 1
 localFolder = %A_AppData%\%programName%
@@ -115,7 +130,7 @@ IfExist, %localFolder%
 {
 	FileRemoveDir, %localFolder%, 1
 	If ErrorLevel
-		MsgBox, The local data could not be removed. This is not a big deal but files may have been left behind.
+		PrettyMsg("The local data could not be removed. This is not a big deal but files may have been left behind.")
 	Else
 		folderCount += 1
 }
@@ -123,10 +138,17 @@ IfExist, %localFolder%%versionSuffix%
 {
 	FileRemoveDir, %localFolder%, 1
 	If ErrorLevel
-		MsgBox, The local data could not be removed. This is not a big deal but files may have been left behind.
+		PrettyMsg("The local data could not be removed. This is not a big deal but files may have been left behind.")
 	Else
 		folderCount += 1
 }
+
+; Remove WHA Dated Folder registry values
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Icon
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb, WHADatedFolder
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Position, Bottom
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder
 
 ; Remove startup shortcut
 FileDelete, %A_Startup%\%programName%.lnk
@@ -146,7 +168,9 @@ If !ErrorLevel
 	fileCount += 1
 
 If folderCount > 0
-	MsgBox, 48,, %programName% was successfully uninstalled.`n`nDirecotries Deleted:%folderCount%`nShortcuts Deleted:%fileCount%
+	PrettyMsg(programName . " was successfully uninstalled.`n`nDirecotries Deleted:" . folderCount . "`nShortcuts Deleted:" . fileCount, "success")
 Else
-	MsgBox, 16,, We encountered an error uninstalling %programName%.  We apologize for the inconvenience. 
+	PrettyMsg("We encountered an error uninstalling " . programName . ".  We apologize for the inconvenience.", "exit")
+
+
 ExitApp
