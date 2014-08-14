@@ -101,20 +101,20 @@ IfNotExist, %A_StartMenuCommon%\%programName%%versionSuffix%.lnk
 ; Write Dated Folder values to registry
 RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Icon, "%installFolder%\Support\wha.ico"
 addError := ErrorLevel
-RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb, WHADatedFolder
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb, WHA Dated Folder
 addError += ErrorLevel
 RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Position, Bottom
 addError += ErrorLevel
-RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command,, "%installFolder%\Dated Folder Creator.exe" "`%v"
+RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command,, "%installFolder%\WHA Dated Folder Creator.exe" "`%v"
 addError += ErrorLevel
 	
-PrettyMsg(programName . " was successfully installed." . shortcutMessage)
+PrettyMsg(programName . " was successfully installed." . shortcutMessage, "success")
 ExitApp
 
 SetupButtonUninstall:
 folderCount := 0
 fileCount := 0
-PrettyMsg("Are you sure you would like to Uninstall %programName%?", "question")
+PrettyMsg("Are you sure you would like to Uninstall " . programName . "?", "question")
 IfMsgBox Cancel
 	Return
 Gui, Setup:Destroy
@@ -145,8 +145,8 @@ IfExist, %localFolder%%versionSuffix%
 
 ; Remove WHA Dated Folder registry values
 RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Icon
-RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb, WHADatedFolder
-RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Position, Bottom
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, MUIVerb
+RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, Position
 RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command
 RegDelete, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder
 
