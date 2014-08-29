@@ -258,9 +258,9 @@ Else
 		; Check if project still exists
 		if !(favVersion%A_Index%)
 		{
-			PrettyMsg("Uh oh, The project:`n`n" . fav%A_Index%Name . "`n`ncould not be found in the Global Project List. It will be removed from your quick launch menu.`n`nYou may want to try adding it again. Please see " . bimGuy . " should this problem persist.")
-			iniLocal.DeleteSection(favList%A_Index%)
-			iniLocal.Save()
+			PrettyMsg("Uh oh, The project:`n`n" . fav%A_Index%Name . "`n`ncould not be found in the Global Project List. You may want to remove it from your favorites. Please see " . bimGuy . " should this problem persist.")
+			;~ iniLocal.DeleteSection(favList%A_Index%)
+			;~ iniLocal.Save()
 			LogMe("Favorite", "Remove", favList%A_Index%, "No longer in global list")
 		}
 		else
@@ -284,17 +284,21 @@ If workset
 	Menu, tray, Check, Specify Worksets
 Menu, tray, Add
 Menu, tray, Add, Settings, SettingsSub
-If iniCentralEdit
-	Menu, tray, Add, Manage Global Project List, ManageListSub
+Menu, Utilities, Add, New Project Structure Setup, ProjStructSub
+Menu, Utilities, Add, Manage Global Project List, ManageListSub
+Menu, tray, Add, Utilities, :Utilities
 Menu, tray, Icon, Settings, %supportFolder%\settings.ico
 Menu, tray, Add, %programName% Help, HelpSub
 If !A_IsCompiled
 {
-	Menu, tray, Add, ListVars, ListVarsSub
-	Menu, tray, Add, KeyHistory, KeyHistorySub
+	Menu, Utilities, Add
+	Menu, Utilities, Add, ListVars, ListVarsSub
+	Menu, Utilities, Add, KeyHistory, KeyHistorySub
 }
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
+If !iniCentralEdit
+	Menu, Utilities, Disable, Manage Global Project List
 return
 
 ; What to do if the tray icon is left-clicked
@@ -312,8 +316,7 @@ return
 ; If the server is not available, check again when the user requests
 TrayReset:
 PrettyMsg("The centralized list of projects could not be found.`nThis may be due to the network not being available.  Please check the network and try again.  Consult " . bimGuy . " should this problem persist.")
-IfMsgBox Retry
-	ReloadMe()
+ReloadMe()
 LogMe("MenuTray", "No Network")
 return
 
@@ -339,6 +342,13 @@ return
 
 KeyHistorySub:
 KeyHistory
+return
+
+ProjStructSub:
+if A_IsCompiled
+	Run, New Project Structure Setup.exe
+else
+	Run, %programfiles%\Autohotkey\Autohotkey.exe "%A_WorkingDir%\New Project Structure Setup.ahk"
 return
 
 TrayExit:
@@ -1017,7 +1027,7 @@ Gui, ManageAdd:Show
 Return
 
 ManageBrowse:
-FileSelectFile, selectedFile, 1,X:\
+FileSelectFile, selectedFile, 1, %maCentral%
 If ErrorLevel
 	Return
 maCentral := selectedFile
@@ -1128,7 +1138,7 @@ If (FileExist(maCentral)) && (InStr(maCentral, ".rvt", -4) > 0)
 			centralTest := iniCentral [centralSections%A_Index%].Central		
 			If (centralTest = maCentral) 
 			{
-				MsgBox, 16, %programName%, % "This central file is already included in the global list under Laucher ID: " . centralSections%A_Index%
+				PrettyMsg("This central file is already included in the global list under Laucher ID: " . centralSections%A_Index%)
 				Gui, ManageAdd:Destroy
 				Return
 			}
@@ -1234,7 +1244,7 @@ pCentral := iniCentral [projectID].Central
 workingFolder := iniCentral [projectID].WorkingFolder
 IfNotExist, %pCentral% ;Check if project is setup correctly
 	{
-		MsgBox, 16, Launcher Error, There is an issue locating the project associated with %projectID%.`nPlease see your friendly BIM manager for additional information.`n`nHave a nice day!
+		PrettyMsg("The central file does not exist:`n`n" . pCentral . "`n`nPlease see " . bimGuy . " for assistance")
 		LogMe("Launcher", "Error", "Locating Central", projectID, pCentral)
 		ReloadMe()
 	}
@@ -1245,12 +1255,15 @@ localPath = %projectFolder%\%localFile%.rvt ;Local file name & path
 
 FindRevit:
 ;Find the path to the correct Revit flavor depending on the version read from the ini file
-IfWinExist, %localFile%.rvt ;Check to see if the file is already open
+if !detach
 {
-	WinActivate
-	WinMaximize	
-	MsgBox, 16, %programName%, Revit is already running with the specified local file:`n%localFile%.rvt
-	ReloadMe()
+	IfWinExist, %localFile%.rvt ;Check to see if the file is already open
+	{
+		WinActivate
+		WinMaximize	
+		PrettyMsg("Revit is already running with the specified local file:`n`n" . localFile . ".rvt")
+		ReloadMe()
+	}
 }
 IfEqual, pVersion, 2013
 {
@@ -1274,7 +1287,7 @@ Else
 }
 IfNotExist, %revitPath%
 {
-	MsgBox, 16, %programName%, Revit %pVersion% cannot be found on this computer.  Please see %bimGuy% for additional information.
+	PrettyMsg("Revit " . pVersion . " cannot be found on this computer.  Please see " . bimGuy . " for additional information.", , 1)
 	LogMe("Launcher", "Error", "FindRevit", revitPath, projectID, pVersion)
 	ReloadMe()
 }
@@ -1289,7 +1302,7 @@ monitorPath = %A_ProgramFiles%%mon64%\Autodesk\Worksharing Monitor for%adesk% Re
 monitorTitle = Worksharing Monitor for Autodesk Revit %pVersion%
 IfNotExist, %monitorPath%
 {
-	MsgBox, 64, Worksharing Monitor, The Worksharing Monitor could not be found on your system.  Please notify your BIM manager so you can play well with others., 7
+	PrettyMsg("The Worksharing Monitor could not be found on your system.  Please notify " . bimGuy . " so you can play well with others.")
 	monitorPath =
 	LogMe("Launcher", "Error", "FindMonitor", monitorPath, projectID, pVersion)
 }
@@ -1300,7 +1313,7 @@ DebugMe("exploreLaunch")
 If exploreLaunch
 {
 	If workingFolder
-		Run, %workingFolder%
+		Run, "%workingFolder%"
 }
 If !detach
 {
@@ -1311,10 +1324,19 @@ If !detach
 	IfNotExist, %projectFolder%
 	{
 		DebugMe("project folder not exist")
-		FileCreateDir, %projectFolder% ;Create a directory if it doesn't
+		if InStr(projectFolder, ".")
+		{
+			StringReplace, projectFolderReplace, projectFolder, ., -, All
+			FileCreateDir, %projectFolderReplace% ;Create a directory if it doesn't already exist
+			FileMoveDir, %projectFolderReplace%, %projectFolder%
+		}
+		else
+			FileCreateDir, %projectFolder% ;Create a directory if it doesn't already exist
 		If Errorlevel
 		{
-			PrettyMsg("A directory structure could not be created in " . localFolder ".`nPlease contact " . bimGuy, "exit")
+			PrettyMsg("A directory structure could not be created in " . localFolder ".`nPlease contact " . bimGuy, "alert", 1)
+			LogMe("Launcher", "Error", "Directory Structure Create", localFolder)
+			ReloadMe()
 		}
 	}
 
@@ -1371,11 +1393,11 @@ If !detach
 
 DebugMe("Launch")
 if Detach
-	launchStatus = Detaching a Revit %pVersion% Model
+	launchStatus = Detaching the Revit %pVersion% Model
 else if Specify
 	launchStatus = Launching Revit %pVersion% with Specify
 else
-	launchStatus = Launching a Revit %pVersion% Model
+	launchStatus = Launching the Revit %pVersion% Model
 GuiControl, Launch:, LaunchText, %launchStatus%
 ;Open Revit with the correct version
 If monitorPath ;Open the worksharing monitor if it exists
@@ -1397,7 +1419,7 @@ WinWait, Project Not Saved Recently,, 1
 if !Errorlevel
 {
 	Gui, Launch:Destroy
-	PrettyMsg("Please save your current project/family before launching a new one.")
+	PrettyMsg("Save your work!`n`nPlease save your current project/family before launching a new one.")
 	LogMe("Launcher", "Error", "Project Not Saved Dialog", projectID, revitPath, revitTitle, localPath)
 	ReloadMe("noshow")
 }
@@ -1421,10 +1443,10 @@ Else
 If workset
 {
 	SplitPath, fName, fName, fPath
-	Sleep 300
+	Sleep 200
 	Control, EditPaste, %fPath%, , ahk_id %fileHwnd%
 	ControlClick, Button1, Open,, L, 2, NA
-	Sleep 300
+	Sleep 200
 	ControlSend, SysListView321, %fName%, Open
 	ControlSend, Button1, {Down 6}{Enter}, Open
 }
@@ -1434,7 +1456,19 @@ Else
 }
 If detach
 {
+	attempt := 0
+	DetachRecheck:
+	attempt += 1
+	WinActivate, Open
 	ControlClick, Button5, Open,, L
+	ControlGet, Button5State, Checked,, Button5, Open
+	if attempt = 5
+	{
+		PrettyMsg("There was an issue detaching your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
+		LogMe("Launcher", "Error", "Detach", "Could not check detach button", fName)
+	}
+	if !Button5State
+		gosub, DetachRecheck
 }
 ControlClick, Button1, Open,, L, 2, NA
 Sleep 200
@@ -1449,10 +1483,16 @@ If workset
 }
 Else If detach
 {
+	
 	LogMe("Launcher", "detach", projectID, fName)
 	Sleep 300
-	WinWait, Detach Model from Central,, 30
-	If !ErrorLevel
+	WinWait, Detach Model from Central,, 60
+	If ErrorLevel
+	{
+		PrettyMsg("This project did not detach properly.`n`nPlease contact " . bimGuy . " should this problem persist.")
+		ReloadMe("noshow")
+	}
+	else
 		ControlClick, Button1, Detach Model from Central,, L
 	Gui, Launch:Destroy
 }
@@ -1562,6 +1602,7 @@ ReloadMe(sx = "show")
 	Global
 	Menu, Tray, DeleteAll
 	Gui, Destroy
+	Gui, Launch:Destroy
 	GoSub, TrayMenu
 	If !(sx = "noshow")
 	{

@@ -14,15 +14,26 @@ If !A_IsAdmin
 	PrettyMsg("You do not have administrator privileges.`n`nTo install " . programName . ", please re-run Setup.exe with administrator privileges.", "exit")
 }
 
+
+; Check if Revit Launcher is running and close it if it is.
+Process, Exist, %programName%.exe
+myPID := ErrorLevel
+if myPID
+{
+	if PrettyMsg("Changes cannot be made to " . programName . " while it is running.`n`nWould you like us to close it for you?", "question", 2) == "Yes"
+		Process, Close, %programName%.exe
+	else
+		ExitApp
+}
+
 FileGetVersion, newVersion, %programName%.exe
 versionSuffix := ""
 installFolder = %A_ProgramFiles%\%programName%%versionSuffix%
 installFullPath = %installFolder%\%programName%.exe
 ; ListVars
 upgrade := 0
-silent := 0
-If silent
-	GoSub, Install
+if 1 = silent
+	gosub, SetupButtonInstall
 
 setupWidth := 450
 setupBcount := 3
@@ -108,7 +119,7 @@ addError += ErrorLevel
 RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command,, "%installFolder%\WHA Dated Folder Creator.exe" "`%v"
 addError += ErrorLevel
 	
-PrettyMsg(programName . " was successfully installed." . shortcutMessage, "success")
+PrettyMsg(programName . " was successfully installed.", "success")
 ExitApp
 
 SetupButtonUninstall:

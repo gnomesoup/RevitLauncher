@@ -187,6 +187,9 @@ if (StrLen(fDay) = 1)
 	fDay := 0 . fDay
 fDay := validEntry("fDay", "(?=(0[1-9]|[1-2]\d|3[0-1]))^\d\d$", "Main")
 
+; Check the description for invalid folder characters
+fDesc := validEntry("fDesc", "^[^\\/:*?""<>]+$", "Main")
+
 ; Group up the checked variables and combine them with a '+'
 Loop, % cAbbr.MaxIndex()
 {
@@ -232,7 +235,7 @@ MainButtonCreate:
 ; Check if the desired folder name already exists
 IfExist, %folderName%
 {
-	whereTo := PrettyMsg("The folder:`n`n'" . folderName . "'`n`nAlready exists. Would you like it opened?", "question",, guiMainWidth)
+	whereTo := PrettyMsg("The following directory already exists:`n`n" . mainDir . "\" . folderName . "\`n`nWould you like it opened?", "question",, guiMainWidth)
 	if whereTo = Yes
 		run %mainDir%\%folderName%
 	else if !whereTo
@@ -240,6 +243,8 @@ IfExist, %folderName%
 	ExitApp
 }
 FileCreateDir, %mainDir%\%folderName%
+if ErrorLevel
+	PrettyMsg("There was an issue creating the directory:`n`n" . mainDir . "\" . folderName . "\`n`nPlease try again. Contact your BIM Coordinator should this issue persist.")
 ExitApp
 return
 
