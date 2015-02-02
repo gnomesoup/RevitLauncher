@@ -228,6 +228,7 @@ return
 
 MainGuiClose:
 MainButtonCancel:
+MainGuiEscape:
 
 ExitApp
 
@@ -407,7 +408,6 @@ validEntry(haystack, needle, guiName)
 			return "????"
 		return "??"
 	}
-	
 }
 
 RelativeMove(sX=0, sY=0, sGuiName="", sControl*)

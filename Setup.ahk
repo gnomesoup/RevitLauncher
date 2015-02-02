@@ -8,23 +8,16 @@ SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 
 ; Perform an install/uninstall of the WHA Revit Launcher Program
 programName = WHA Revit Launcher
+startVar = %1%
+silent := if startVar = "silent" ? true : false
+uninstall := if startVar = "uninstall" ? true : false
 
+; Check if setup is run with admin privileges
 If !A_IsAdmin
 {
 	PrettyMsg("You do not have administrator privileges.`n`nTo install " . programName . ", please re-run Setup.exe with administrator privileges.", "exit")
 }
 
-
-; Check if Revit Launcher is running and close it if it is.
-Process, Exist, %programName%.exe
-myPID := ErrorLevel
-if myPID
-{
-	if PrettyMsg("Changes cannot be made to " . programName . " while it is running.`n`nWould you like us to close it for you?", "question", 2) == "Yes"
-		Process, Close, %programName%.exe
-	else
-		ExitApp
-}
 
 FileGetVersion, newVersion, %programName%.exe
 versionSuffix := ""
@@ -32,8 +25,42 @@ installFolder = %A_ProgramFiles%\%programName%%versionSuffix%
 installFullPath = %installFolder%\%programName%.exe
 ; ListVars
 upgrade := 0
-if 1 = silent
-	gosub, SetupButtonInstall
+
+
+; If the script is run in silent mode, check for running process and skip GUI
+if silent
+{
+	FileGetVersion, oldVersion, %installFullPath%
+	If oldVersion >= %newVersion%
+		ExitApp
+	Process, Exist, %programName%.exe
+	if ErrorLevel
+		Runwait, taskkill /im "%programName%.exe" /f
+	upgrade := if FileExist(installFullPath) ? true : false
+	gosub, Install
+}
+
+; If the script is run in uninstall mode, check for running process and skip GUI
+if uninstall
+{
+	Process, Exist, %programName%.exe
+	if ErrorLevel
+		Runwait, taskkill /im "%programName%.exe" /f
+	gosub, Uninstall
+}
+
+; Check if Revit Launcher is running and close it if it is.
+Process, Exist, %programName%.exe
+if ErrorLevel
+{
+	if PrettyMsg("Changes cannot be made to " . programName . " while it is running.`n`nWould you like us to close it for you?", "question", 2) == "Yes"
+		Runwait, taskkill /im "%programName%.exe" /f
+	else
+		ExitApp
+}
+Process, Exist, %programName%.exe
+if ErrorLevel
+	PrettyMsg("Setup was unable to close " . programName . ". Sorry for the trouble.`n`nSetup will now exit. Please close the program and try running setup again.", "exit")
 
 setupWidth := 450
 setupBcount := 3
@@ -92,10 +119,16 @@ SetupButtonCancel:
 ExitApp
 
 SetupButtonInstall:
-PrettyMsg("Proceed with installing " . programName . "?", "question")
-IfMsgBox Cancel
-	Return
+proceed := PrettyMsg("Proceed with installing " . programName . "?", "question")
+if proceed = no
+	ExitApp
+else if !proceed
+	return
+
+gosub, progressGUI
+
 Gui, Setup:Destroy
+
 Install:
 FileCopyDir, %A_ScriptDir%, %installFolder%, 1
 If ErrorLevel
@@ -118,17 +151,24 @@ RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder, 
 addError += ErrorLevel
 RegWrite, REG_SZ, HKEY_CLASSES_ROOT, Directory\Background\shell\WHADatedFolder\command,, "%installFolder%\WHA Dated Folder Creator.exe" "`%v"
 addError += ErrorLevel
-	
-PrettyMsg(programName . " was successfully installed.", "success")
+Gui, progressGUI:Destroy
+if !silent
+	PrettyMsg(programName . " was successfully installed.", "success")
 ExitApp
 
 SetupButtonUninstall:
 folderCount := 0
 fileCount := 0
-PrettyMsg("Are you sure you would like to Uninstall " . programName . "?", "question")
-IfMsgBox Cancel
-	Return
+proceed := PrettyMsg("Are you sure you would like to Uninstall " . programName . "?", "question")
+if proceed = no
+	ExitApp
+else if !proceed
+	return
 Gui, Setup:Destroy
+
+Uninstall:
+gosub, ProgressGUI
+GuiControl, progressGUI:, progressText, Please wait while %programName% is uninstalled.
 ; Remove the main install directory
 FileRemoveDir, %installFolder%, 1
 If ErrorLevel
@@ -177,11 +217,24 @@ If !ErrorLevel
 FileDelete, %A_StartMenuCommon%\%programName%%versionSuffix%.lnk
 If !ErrorLevel
 	fileCount += 1
+Gui, progressGUI:Destroy
 
-If folderCount > 0
-	PrettyMsg(programName . " was successfully uninstalled.`n`nDirecotries Deleted:" . folderCount . "`nShortcuts Deleted:" . fileCount, "success")
-Else
-	PrettyMsg("We encountered an error uninstalling " . programName . ".  We apologize for the inconvenience.", "exit")
+if !uninstall
+{
+	If folderCount > 0
+		PrettyMsg(programName . " was successfully uninstalled.`n`nDirecotries Deleted:" . folderCount . "`nShortcuts Deleted:" . fileCount, "success")
+	Else
+		PrettyMsg("We encountered an error uninstalling " . programName . ".  We apologize for the inconvenience.", "exit")
+}
 
 
 ExitApp
+
+ProgressGUI:
+progressGUIwidth := 450
+Gui, progressGUI:new
+whaLogo(progressGUIwidth, "progressGUI")
+Gui, progressGUI:Font, s12 cBlack, Arial
+Gui, progressGUI:Add, Text, w%progressGUIwidth% xm center vprogressText, Please wait while %programName% is installed
+Gui, progressGUI:Show
+return

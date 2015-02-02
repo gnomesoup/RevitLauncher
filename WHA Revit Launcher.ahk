@@ -55,6 +55,7 @@ IfNotExist %iniPathLocal%
 	If ErrorLevel ; If copying the file goes wrong, notify and exit
 	{
 		PrettyMsg("We were unable to properly initialize " . programName . ".  Please see " . bimGuy . " for additional information.", "exit")
+		LogMe("Program", "Startup", "FAIL", "settings ini file copy", iniPathLocal)
 	}
 	; As long as we are setting things up, make sure the program starts when the user logs including
 	; This can be turned off in settings
@@ -67,12 +68,50 @@ IfNotExist %iniPathLocal%
 iniLocal := class_EasyIni(iniPathLocal) 
 If (!iniLocal.Settings.iniPathCentral) ;Check if settings file is good
 {
-	PrettyMsg("A file named """ . iniPathLocal . """ either could not be found in the same directory as this executable or it was manually altered.  This program will now exit.`n`nPlease contact your friendly BIM Coordinator.", "exit")
+	LogMe("Program", "Startup", "Fail", "iniPathLocal file not found", iniPathLocal)
+	
+	PrettyMsg("There is a problem with your installation of " . programName . ". Please see " . bimGuy . " for addtional information. This program will now exit", "exit")
+}
+
+; Create a log to keep track of comings and goings
+; logCheck := 1
+If (iniLocal.Settings.LocalLog) ;Check if ini file has log setting
+{
+	localLog := iniLocal.Settings.LocalLog
+}
+Else ;add a setting with the default value
+{
+	SplitPath, iniPathLocal,, settingsFolder
+	localLog := settingsFolder . "\Log"
+	iniLocal.AddKey("Settings", "LocalLog", localLog)
+	iniLocal.save()
 }
 
 ; Load up the global project list
 iniPathCentral := iniLocal.Settings.iniPathCentral
-iniCentral := class_EasyIni(iniPathCentral)
+IfNotExist, %iniPathCentral% ;If the path the the central ini doesn't resolve check a few things
+{
+	LogMe("Program", "Startup", "Fail", "Valid Central INI file not found")
+	iniPathProgram := A_ScriptDir . "\" . programName ".ini"
+	IfNotExist, %iniPathProgram%
+	{
+		LogMe("Program", "Startup", "Fail", "Program Files ini missing")
+		PrettyMsg("There is a problem with your installation of " . programName . ". Please see " . bimGuy . " for addtional information. This program will now exit", "exit")
+	}
+	iniProgram := class_EasyIni(iniPathProgram)
+	iniPathCentral := iniProgram.Settings.iniPathCentral
+	IfExist, %iniPathCentral%
+	{
+		LogMe("Program", "Startup", "Fail", "Attempting to overwrite local central location")
+		iniLocal.Settings.iniPathCentral := iniPathCentral
+		iniLocal.save()
+		LogMe("Program", "Startup", "Success", "Overwrote local central location to " . iniLocal.Settings.iniPathCentral)
+	}
+}
+else
+{
+	iniCentral := class_EasyIni(iniPathCentral)
+}
 
 ; Get some default settings
 detach := iniLocal.Settings.Detach
@@ -109,19 +148,6 @@ DebugMe("Start")
 ; By default we assume Revit is not running
 revitRunning := 0
 
-; Create a log to keep track of comings and goings
-; logCheck := 1
-If (iniLocal.Settings.LocalLog) ;Check if ini file has log setting
-{
-	localLog := iniLocal.Settings.LocalLog
-}
-Else ;add a setting with the default value
-{
-	SplitPath, iniPathLocal,, settingsFolder
-	localLog := settingsFolder . "\Log"
-	iniLocal.AddKey("Settings", "LocalLog", localLog)
-	iniLocal.save()
-}
 IfNotExist, %localLog%
 	FileCreateDir, %localLog%
 If (iniLocal.Settings.ExitReason) ;Check if ini file has setting
@@ -284,9 +310,12 @@ If workset
 	Menu, tray, Check, Specify Worksets
 Menu, tray, Add
 Menu, tray, Add, Settings, SettingsSub
-Menu, Utilities, Add, New Project Structure Setup, ProjStructSub
-Menu, Utilities, Add, Manage Global Project List, ManageListSub
-Menu, tray, Add, Utilities, :Utilities
+if !noNetwork
+{
+	Menu, Utilities, Add, New Project Structure Setup, ProjStructSub
+	Menu, Utilities, Add, Manage Global Project List, ManageListSub
+	Menu, tray, Add, Utilities, :Utilities
+}
 Menu, tray, Icon, Settings, %supportFolder%\settings.ico
 Menu, tray, Add, %programName% Help, HelpSub
 If !A_IsCompiled
@@ -294,6 +323,7 @@ If !A_IsCompiled
 	Menu, Utilities, Add
 	Menu, Utilities, Add, ListVars, ListVarsSub
 	Menu, Utilities, Add, KeyHistory, KeyHistorySub
+	Menu, Utilities, Add, Built in variables, BuiltInVar
 }
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
@@ -344,12 +374,17 @@ KeyHistorySub:
 KeyHistory
 return
 
+BuiltInVar:
+PrettyMsg("A_ScriptDir: " . A_ScriptDir . "`n`nA_IsCompiled: " . A_IsCompiled . "`n`nA_MyDocuments: " . A_MyDocuments)
+return
+
 ProjStructSub:
 if A_IsCompiled
 	Run, New Project Structure Setup.exe
 else
 	Run, %programfiles%\Autohotkey\Autohotkey.exe "%A_WorkingDir%\New Project Structure Setup.ahk"
 return
+
 
 TrayExit:
 ExitApp
@@ -1387,7 +1422,8 @@ If !detach
 	if ErrorLevel ;Check to make sure everything copied correctly
 	{
 		LogMe("Launcher", "Error", "LocalCreate", projectID, localPath, pCentral)
-		PrettyMsg("The local file could not be copied to your computer.  Please see your BIM manager for additional information.", "exit")
+		PrettyMsg("The local file could not be copied to your computer.  Please see your BIM manager for additional information.", "alert", 1)
+		ReloadMe()
 	}
 }
 
@@ -1414,86 +1450,121 @@ Else
 	WinMaximize
 }
 WinActivate
-Send ^o
-WinWait, Project Not Saved Recently,, 1
-if !Errorlevel
+IfWinExist, Open, &Detach from Central
+	WinActivate, Open, &Detach from Central
+else
 {
-	Gui, Launch:Destroy
-	PrettyMsg("Save your work!`n`nPlease save your current project/family before launching a new one.")
-	LogMe("Launcher", "Error", "Project Not Saved Dialog", projectID, revitPath, revitTitle, localPath)
-	ReloadMe("noshow")
+	Send ^o
+	WinWait, Project Not Saved Recently,, 1
+	if !Errorlevel
+	{
+		Gui, Launch:Destroy
+		PrettyMsg("Save your work!`n`nPlease save your current project/family before launching a new one.")
+		LogMe("Launcher", "Error", "Project Not Saved Dialog", projectID, revitPath, revitTitle, localPath)
+		ReloadMe("noshow")
+	}
+	WinWait, Open, &Detach from Central, 30
+	If ErrorLevel
+	{
+		Gui, Launch:Destroy
+		PrettyMsg("There seems to be an issue launching your project. Check Revit for any opened dailog boxes and try launching again.`n`nThanks.")
+		LogMe("Launcher", "Error", "OpenWait", projectID, revitPath, revitTitle, localPath)
+		ReloadMe("noshow")
+	}
 }
-WinWait, Open,, 30
-If ErrorLevel
+attempt := 0
+gosub, CheckOpenID
+if attempt > 5
 {
-	Gui, Launch:Destroy
-	PrettyMsg("There seems to be an issue launching your project. Check Revit for any opened dailog boxes and try launching again.`n`nThanks.")
-	LogMe("Launcher", "Error", "OpenWait", projectID, revitPath, revitTitle, localPath)
-	ReloadMe("noshow")
+	PrettyMsg(programName . " could not correctly identify your session of Revit. Please try again.`n`nFeel free to contact " . bimGuy . " should this problem persist.")
+	LogMe("Launcher", "Error", "openID", "projectID", projectID, "revitPath", revitPath, "revitTitle", revitTitle, "localPath", localPath)
+	ReloadMe()
+	return
 }
-Sleep 300
-WinGet, openID, ID, Open
-ControlGet, fileHwnd, Hwnd,, Edit1, ahk_id %openID%
-ControlGet, folderHwnd, Hwnd,, SysListView321, ahk_id %openID%
-ControlGet, openHwnd, Hwnd,, Button1, ahk_id %openID%
+if openID = 0x0
+{
+	gosub, CheckOpenID
+	return
+}
+
+ControlGet, fileHwnd, Hwnd,, Edit1, ahk_ID %openID%
+ControlGet, folderHwnd, Hwnd,, SysListView321, ahk_ID %openID%
+ControlGet, openHwnd, Hwnd,, Button1, ahk_ID %openID%
 if detach
 	fName := pCentral
 Else
 	fName := localPath
 If workset
 {
-	SplitPath, fName, fName, fPath
-	Sleep 200
-	Control, EditPaste, %fPath%, , ahk_id %fileHwnd%
-	ControlClick, Button1, Open,, L, 2, NA
-	Sleep 200
-	ControlSend, SysListView321, %fName%, Open
-	ControlSend, Button1, {Down 6}{Enter}, Open
+	StringGetPos, fSplit, fName, `\, r1
+	fPath := SubStr(fName, 1, fSplit + 1)
+	fNameShort := SubStr(fName, fSplit + 2)
+	Control, EditPaste, %fPath%, , ahk_ID %fileHwnd%
+	ControlClick, Button1, ahk_ID %openID%,, L, 2, NA
+	Sleep 100
+	gosub, SpecifyCheck
+	ControlSend, Button1, {Down 6}{Enter}, ahk_ID %openID%
 }
 Else
 {
-	Control, EditPaste, %fName%, Edit1, Open
+	ControlSend, Edit1, {Ctrl Down}a{Ctrl Up}, ahk_ID %openID%
+	Control, EditPaste, %fName%, Edit1, ahk_ID %openID%
 }
 If detach
 {
 	attempt := 0
-	DetachRecheck:
-	attempt += 1
-	WinActivate, Open
-	ControlClick, Button5, Open,, L
-	ControlGet, Button5State, Checked,, Button5, Open
-	if attempt = 5
-	{
-		PrettyMsg("There was an issue detaching your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
-		LogMe("Launcher", "Error", "Detach", "Could not check detach button", fName)
-	}
-	if !Button5State
-		gosub, DetachRecheck
+	gosub, DetachRecheck
 }
-ControlClick, Button1, Open,, L, 2, NA
-Sleep 200
+attempt := 0
+gosub, OpenProject
 If workset
 {
 	LogMe("Launcher", "workset", projectID, fName, fPath)
 	WinWait, Opening Worksets,, 60
+	WinWaitClose, Opening Worksets
+	If detach
+	{
+		WinWait, Detach Model from Central,, 30
+		If ErrorLevel
+		{
+			PrettyMsg("This project may not have detach properly. Please check to make sure you are not working in the central model.`n`nPlease contact " . bimGuy . " should this problem persist.", "alert", 1)
+			LogMe("Launcher", "Error", "detach", "specify", "detach message never found", "projectID", projectID, "fName", fName, "fPath", fPath)
+			ReloadMe("noshow")
+		}
+		else
+		{	
+			WinActivate, Detach Model from Central
+			dmcID := WinActive("Detach Model from Central")
+			ControlClick, Button1, ahk_id %dmcID%,, L
+			IfWinExist, Detach Model from Central ; In case the first method doesn't work
+			{
+				ControlClick, Button1, Detach Model from Central,, L
+			}
+		}
+	}
+	else
+	{
+		WinWait, Copied Central Model,, 30
+		ControlClick, Button1, Copied Central Model,, L, 2, NA
+	}
 	Gui, Launch:Destroy
-	Sleep 200
-	WinWait, Copied Central Model,, 30
-	ControlClick, Button1, Copied Central Model,, L, 2, NA
 }
 Else If detach
 {
 	
 	LogMe("Launcher", "detach", projectID, fName)
-	Sleep 300
-	WinWait, Detach Model from Central,, 60
+	WinWait, Detach Model from Central,, 30
+	dmcID := WinActive("Detach Model from Central")
 	If ErrorLevel
 	{
 		PrettyMsg("This project did not detach properly.`n`nPlease contact " . bimGuy . " should this problem persist.")
+		LogMe("Launcher", "Error", "detach", "projectID", projectID, "fName", fName)
 		ReloadMe("noshow")
 	}
 	else
-		ControlClick, Button1, Detach Model from Central,, L
+	{
+		ControlClick, Button1, ahk_id %dmcID%,, L
+	}
 	Gui, Launch:Destroy
 }
 Else
@@ -1511,7 +1582,79 @@ WinActivate, ^%revitTitle%
 detach := iniLocal.Settings.Detach
 ReloadMe("noshow")
 
-Return
+return
+
+CheckOpenID:
+attemp += 1
+if !A_IsCompiled
+	GuiControl, Launch:, LaunchSub, OpenID Attempt #%attempt%
+Sleep 100
+WinActivate, Open, &Detach from Central
+openID := WinActive("Open", "&Detach from Central")
+return
+
+OpenProject:
+attempt += 1
+if !A_IsCompiled
+	GuiControl, Launch:, LaunchSub, Open Attempt #%attempt%
+ControlClick, Button1, ahk_ID %openID%,, L, 2, NA
+if attempt > 5
+{
+	PrettyMsg("There was an issue opening your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
+	LogMe("Launcher", "Error", "Open", "Could not click open button", "fName", fName)
+	ReloadMe()
+	return
+}
+WinWaitNotActive, ahk_ID %openID%,, 1
+if ErrorLevel
+{
+	gosub, OpenProject
+	return
+}
+return
+
+DetachRecheck:
+attempt += 1
+if !A_IsCompiled
+	GuiControl, Launch:, LaunchSub, Detach Attempt #%attempt%
+WinActivate, Open, &Detach from Central
+ControlClick, Button5, ahk_ID %openID%,, L
+ControlGet, Button5State, Checked,, Button5, ahk_ID %openID%
+if attempt > 5
+{
+	PrettyMsg("There was an issue detaching your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
+	LogMe("Launcher", "Error", "Detach", "Could not check detach button", "fName", fName)
+	ReloadMe()
+	return
+}
+if !Button5State
+{
+	gosub, DetachRecheck
+	return
+}
+return
+
+SpecifyCheck:
+attempt += 1
+if !A_IsCompiled
+	GuiControl, Launch:, LaunchSub, Specify %fNameShort% Attempt #%attempt%
+WinActivate, Open, &Detach from Central
+ControlSend, SysListView321, %fNameShort%, ahk_ID %openID%
+Sleep 100
+ControlGet, fNameCheck, Line, 1, Edit1, ahk_ID %openID%
+if attempt > 5
+{
+	PrettyMsg("There was an error while trying to open the project with the specify worksets option. Please try launching your project again.`n`nContact " . bimGuy . " should this problem persist.")
+	LogMe("Launcher", "Error", "Specify worksets select project", "attempt " . attempt, fName, fNameShort, fNameCheck)
+	ReloadMe()
+	return
+}
+if fNameCheck != %fNameShort%
+{
+	ControlSend, SysListView321, {Down}, Open, &Detach from Central
+	gosub, SpecifyCheck
+}
+return
 
 LaunchSplash:
 launchWidth := 500
@@ -1529,16 +1672,6 @@ Gui, Launch:Add, Text, yp+40 center w%launchWidth% vLaunchSub, %pNumber% %pName%
 Gui, Launch:Font, c%guiColor2% s18, Arial
 launchHeight := 150
 launchY := pMonitorBottom - launchHeight
-;~ if detach or workset
-;~ {
-	;~ if detach & workset
-		;~ GuiControl, Launch:Text, launchSub, Detach and Specify %pNumber% %pName%
-	;~ else if workset
-		;~ GuiControl, Launch:Text, launchSub, Specify Worksets %pNumber% %pName%
-	;~ else
-		;~ GuiControl, Launch:Text, launchSub, Detach %pNumber% %pName%
-;~ }
-
 Gui, Launch:Show, y%launchY% h%launchHeight%
 return
 ; ### End of Main Routine ###
@@ -1601,6 +1734,7 @@ ReloadMe(sx = "show")
 {
 	Global
 	Menu, Tray, DeleteAll
+	Menu, Utilities, DeleteAll
 	Gui, Destroy
 	Gui, Launch:Destroy
 	GoSub, TrayMenu

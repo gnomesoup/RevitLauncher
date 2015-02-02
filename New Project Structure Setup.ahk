@@ -79,6 +79,9 @@ if match
 	}
 }
 
+; Check the description for invalid folder characters
+pName := validEntry("pName", "^[^\\/:*?""<>]+$", "Main")
+
 if pName and dateTest
 {
 	GuiControl, Main:Enable, Button2
@@ -98,8 +101,8 @@ else
 	}
 	GuiControl, Main:Font, pNum
 }
-Gui, Font, cBlack s18
-GuiControl, Main:Font, pName
+;~ Gui, Font, cBlack s18
+;~ GuiControl, Main:Font, pName
 dateIssue := if dateIssue ? dateIssue : "Please enter an 8 digit project number with no dashes or spaces, e.g.(" . currentYear . "0520)."
 GuiControl,, numHelp, %dateIssue%
 dateIssue := false
@@ -179,4 +182,21 @@ CopyFilesAndFolders(SourcePattern, DestinationFolder, DoOverwrite = false)
 
     }
     return ErrorCount
+}
+
+validEntry(haystack, needle, guiName)
+{
+	global
+	If RegExMatch(%haystack%, "O)" . needle, match)
+	{
+		Gui, %guiName%:Font, cDefault s18
+		GuiControl, %guiName%:Font, % haystack
+		return match.Value
+	}
+	else
+	{
+		Gui, %guiName%:Font, cRed s18
+		GuiControl, %guiName%:Font, % haystack
+		Gui, %guiName%:Font, cDefault s18
+	}
 }
