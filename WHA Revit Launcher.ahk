@@ -117,6 +117,7 @@ else
 detach := iniLocal.Settings.Detach
 workset := iniLocal.Settings.Workset
 debug := iniLocal.Settings.Debug
+audit := 0
 
 ; Set location where local files will be saved
 If (iniLocal.Settings.LocalFolder) ;Check if ini file has setting
@@ -335,6 +336,8 @@ If !iniCentralEdit and !noNetwork
 	Menu, Utilities, Disable, Manage Global Project List
 	Menu, Utilities, Disable, Audit a Central Model
 }
+
+gosub, AuditSub ; for debug purposes, please remove when complete
 return
 
 ; What to do if the tray icon is left-clicked
@@ -1266,7 +1269,8 @@ Return
 AuditSub:
 if !PrettyMsg("Caution!`n`nPlease make sure that all users have exited out of all local files associated with the central file to be audited. Any current local files will be unable to ""Sync to Central"" after this process is complete", "alert")
 	return
-
+if audit
+	Gui, AuditProject:Destroy
 ; Create Audit GUI
 
 ; Load up the global list of projects
@@ -1316,16 +1320,19 @@ If A_GuiEvent = DoubleClick
 Return
 
 AuditProjectAudit:
-; This does the hard work of actually ADDING the project to the Quick Launch list
 ; Make sure you zero out the RowNumber otherwise you could see some weird behaviour
+audit := 1
+; Get the project selected, set project variables, and run the main routine
 RowNumber := 0
 RowNumber := LV_GetNext(RowNumber)
 LV_GetText(rowText, rowNumber, 4)
-Gui, AuditProject:Destroy
-PrettyMsg("Backup " . rowText . " and central_backup folder")
-PrettyMsg("Audit central")
-PrettyMsg("Open local and sync with options to release worksets")
+projectID := rowText
+DebugMe("AuditProjectAudit")
+LogMe("AuditProjectAudit", projectID)
+Gui, AuditProject:Hide
+gosub, MainRoutine
 return
+
 ; ### End of Audit Subroutine ###
 
 
@@ -1363,6 +1370,15 @@ pNameShort := iniCentral [projectID].NameShort
 pVersion := iniCentral [projectID].Version
 pCentral := iniCentral [projectID].Central
 workingFolder := iniCentral [projectID].WorkingFolder
+if audit
+{
+	SplitPath, pCentral, centralFileName, centralFileDir, , centralBackupName
+	centralBackupName := centralBackupName . "_backup"
+	FormatTime, auditDate, , yyyy-MM-dd
+	auditArchiveDir := workingFolder . "\Archive\" . auditDate . " Pre-audit Backup"
+	centralFileBackupDir := centralFileDir . "\" . centralBackupName
+	LogMe("Launcher", "Audit", pCentral)
+}
 IfNotExist, %pCentral% ;Check if project is setup correctly
 	{
 		PrettyMsg("The central file does not exist:`n`n" . pCentral . "`n`nPlease see " . bimGuy . " for assistance")
@@ -1382,9 +1398,33 @@ if !detach
 	{
 		WinActivate
 		WinMaximize	
+		if audit
+		{
+			PrettyMsg("You have a local file open for the central model you are trying to audit. Please close """ . localFile . ".rvt"" and attempt the audit again.")
+			Gui, AuditModel:Show
+			Gui, Launch:Destroy
+			LogMe("Launcher", "Error", "Audit Fail", "Open Local File", localFile, pCentral)
+			return
+		}
 		PrettyMsg("Revit is already running with the specified local file:`n`n" . localFile . ".rvt")
 		ReloadMe()
 	}
+}
+
+IfWinExist, %CentralFileName%
+{
+	WinActivate
+	WinMaximize
+	PrettyMsg("Open Central File!`n`n" . pCentral . " is currently open. Please close this file immediately and try again.", "alert")
+	if audit
+	{
+		Gui, AuditProject:Show
+		Gui, Launch:Destroy
+		LogMe("Launcher", "Error", "Audit Fail", "Open Central File", pCentral)
+		return
+	}
+	LogMe("Launcher", "Error", "Open Central File", pCentral)
+	ReloadMe()
 }
 IfEqual, pVersion, 2013
 {
@@ -1436,7 +1476,7 @@ If exploreLaunch
 	If workingFolder
 		Run, "%workingFolder%"
 }
-If !detach
+If (!detach and !audit)
 {
 	launchStatus = Copying local...
 	GuiControl, Launch:, LaunchText, %launchStatus%
@@ -1512,12 +1552,34 @@ If !detach
 		ReloadMe()
 	}
 }
-
+; Backup central if in audit mode
+if audit
+{
+	launchStatus = Audit: Backing Up Central...
+	GuiControl, Launch:, LaunchText, %launchStatus%
+	auditArchiveDirTest := auditArchiveDir
+	While FileExist(auditArchiveDirTest)
+	{
+		auditArchiveDirTest := auditArchiveDir . A_Index
+	}
+	FileCreateDir, %auditArchiveDirTest%
+	If ErrorLevel
+	{
+		PrettyMsg("Error`n`nWe were unable to create the archive directory for the file being audited`n`n" . pCentral . "`n`nPlease check your project settings in the global project list and try again.", "alert", 1)
+		LogMe("Launcher", "Audit", "Error creating backup", auditArchiveDir)
+	}
+	PrettyMsg("Audit Backup`n`n" . pCentral . "`n`n" . centralFileBackupDir . "`n`n" . auditArchiveDir)
+	Gui, AuditProject:Show
+	Gui, Launch:Destroy
+	return
+}
 DebugMe("Launch")
 if Detach
 	launchStatus = Detaching the Revit %pVersion% Model
 else if Specify
 	launchStatus = Launching Revit %pVersion% with Specify
+else if Audit
+	launchStatus = Detaching and Auditing a Revit %pVersion% Model
 else
 	launchStatus = Launching the Revit %pVersion% Model
 GuiControl, Launch:, LaunchText, %launchStatus%
@@ -1822,6 +1884,7 @@ ReloadMe(sx = "show")
 	Menu, Tray, DeleteAll
 	if !noNetwork
 		Menu, Utilities, DeleteAll
+	audit := 0
 	Gui, Destroy
 	Gui, Launch:Destroy
 	GoSub, TrayMenu
