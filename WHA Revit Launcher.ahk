@@ -202,10 +202,13 @@ IfExist, %iniPathCentral%
 {
 	if noNetwork
 	{
+		;need to reload the central ini in case the program launched first time without network
+		iniCentral := class_EasyIni(iniPathCentral)
 		noNetwork := !logMe("Program", "Network Check", "Success")
 		ReloadMe("noshow")
 	}
 	noNetwork := 0
+	return
 	return
 }
 return
@@ -236,7 +239,6 @@ return
 
 ; ### Create the right click menu ###
 TrayMenu:
-
 ; Read list of favorites
 favList := iniLocal.GetSections(, "C")
 
@@ -282,7 +284,7 @@ Else
 		; Get the current project version from the Global Project List
 		favVersion%A_Index% := iniCentral [fav%A_Index%].Version
 		; Check if project still exists
-		if !(favVersion%A_Index%)
+		if !(favVersion%A_Index%) and !noNetwork
 		{
 			PrettyMsg("Uh oh, The project:`n`n" . fav%A_Index%Name . "`n`ncould not be found in the Global Project List. You may want to remove it from your favorites. Please see " . bimGuy . " should this problem persist.")
 			;~ iniLocal.DeleteSection(favList%A_Index%)
@@ -327,7 +329,7 @@ If !A_IsCompiled
 }
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
-If !iniCentralEdit
+If !iniCentralEdit and !noNetwork
 	Menu, Utilities, Disable, Manage Global Project List
 return
 
@@ -1734,7 +1736,8 @@ ReloadMe(sx = "show")
 {
 	Global
 	Menu, Tray, DeleteAll
-	Menu, Utilities, DeleteAll
+	if !noNetwork
+		Menu, Utilities, DeleteAll
 	Gui, Destroy
 	Gui, Launch:Destroy
 	GoSub, TrayMenu
