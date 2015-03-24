@@ -316,6 +316,7 @@ if !noNetwork
 {
 	Menu, Utilities, Add, New Project Structure Setup, ProjStructSub
 	Menu, Utilities, Add, Manage Global Project List, ManageListSub
+	Menu, Utilities, Add, Audit a Central Model, AuditSub
 	Menu, tray, Add, Utilities, :Utilities
 }
 Menu, tray, Icon, Settings, %supportFolder%\settings.ico
@@ -330,7 +331,10 @@ If !A_IsCompiled
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
 If !iniCentralEdit and !noNetwork
+{
 	Menu, Utilities, Disable, Manage Global Project List
+	Menu, Utilities, Disable, Audit a Central Model
+}
 return
 
 ; What to do if the tray icon is left-clicked
@@ -1243,6 +1247,86 @@ ManageGuiClose:
 ReloadMe()
 Return
 ; ### End of Manage Project List Menu ###
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; ### Create Subroutine to Audit Models ###
+AuditSub:
+if !PrettyMsg("Caution!`n`nPlease make sure that all users have exited out of all local files associated with the central file to be audited. Any current local files will be unable to ""Sync to Central"" after this process is complete", "alert")
+	return
+
+; Create Audit GUI
+
+; Load up the global list of projects
+iniCentral := class_EasyIni(iniPathCentral)
+; Get all of the projects in the list
+centralSections := iniCentral.GetSections(,"C")
+; Create an array of the projects for looping
+StringSplit, centralSections, centralSections, `n
+; Create the add project menu
+guiTitle := "Select a central file to audit:"
+guiWidth := 500
+bWidth := (guiWidth - 10) / 2
+bLoc := bWidth + 10
+tFont := GetFontMax(guiTitle, guiWidth)
+Gui, AuditProject:New,, %programName%
+Gui, AuditProject:Font, %tFont% , Arial
+Gui, AuditProject:Add, Text, center w%guiWidth%, %guiTitle%
+Gui, AuditProject:Font, s10 , Arial
+Gui, AuditProject:Add, ListView, AltSubmit r10 w500 gAuditProjectList -Multi, Number|Name|Version|LaunchID
+; Add all of the projects to the listview
+GoSub, UserListView
+
+Gui, AuditProject:Font, s10 c%guiColor1%, Arial
+Gui, AuditProject:Add, Text, w500 center yp+230, Choose a project to audit. Please ensure all users have exited the model and all local files before proceeding.
+Gui, AuditProject:Font, s18 cBlack, Arial
+Gui, AuditProject:Add, Button,  w%bWidth% yp+60 xm gAuditProjectAudit, &Audit Central
+Gui, AuditProject:Add, Button,  wp xp+%bLoc% Default gAuditProjectGuiCancel, &Cancel
+GuiControl, Disable, &Audit Central
+Gui, AuditProject:Show
+
+return
+
+AuditProjectGuiEscape:
+AuditProjectGuiClose:
+AuditProjectGuiCancel:
+Gui, AuditProject:Destroy
+; Once the menu is destroyed, reopen the tray menu to let users know it is still down there
+TrayOpen()
+return
+
+AuditProjectList:
+; Enable the add button once a user selects a project
+If A_GuiEvent = I
+	GuiControl, AuditProject:Enable, Button1
+If A_GuiEvent = DoubleClick
+	GoSub, AuditProjectAudit
+Return
+
+AuditProjectAudit:
+; This does the hard work of actually ADDING the project to the Quick Launch list
+; Make sure you zero out the RowNumber otherwise you could see some weird behaviour
+RowNumber := 0
+RowNumber := LV_GetNext(RowNumber)
+LV_GetText(rowText, rowNumber, 4)
+Gui, AuditProject:Destroy
+PrettyMsg("Backup " . rowText . " and central_backup folder")
+PrettyMsg("Audit central")
+PrettyMsg("Open local and sync with options to release worksets")
+return
+; ### End of Audit Subroutine ###
 
 
 
