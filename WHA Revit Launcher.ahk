@@ -1377,6 +1377,7 @@ if audit
 	FormatTime, auditDate, , yyyy-MM-dd
 	auditArchiveDir := workingFolder . "\Archive\" . auditDate . " Pre-audit Backup"
 	centralFileBackupDir := centralFileDir . "\" . centralBackupName
+	auditError := 0
 	LogMe("Launcher", "Audit", pCentral)
 }
 IfNotExist, %pCentral% ;Check if project is setup correctly
@@ -1558,9 +1559,16 @@ if audit
 	launchStatus = Audit: Backing Up Central...
 	GuiControl, Launch:, LaunchText, %launchStatus%
 	auditArchiveDirTest := auditArchiveDir
+	n := 0
 	While FileExist(auditArchiveDirTest)
 	{
+		n += 1
 		auditArchiveDirTest := auditArchiveDir . A_Index
+	}
+	if (n > 12)
+	{
+		if !PrettyMsg("Warning!`n`nThere have been at least " . n . " audit backup folders created already. It is not typical to need to audit your project this frequently. Press ""OK"" if you are sure you want to continue", "alert")
+			ReloadMe()
 	}
 	FileCreateDir, %auditArchiveDirTest%
 	If ErrorLevel
@@ -1568,18 +1576,25 @@ if audit
 		PrettyMsg("Error`n`nWe were unable to create the archive directory for the file being audited`n`n" . pCentral . "`n`nPlease check your project settings in the global project list and try again.", "alert", 1)
 		LogMe("Launcher", "Audit", "Error creating backup", auditArchiveDir)
 	}
-	PrettyMsg("Audit Backup`n`n" . pCentral . "`n`n" . centralFileBackupDir . "`n`n" . auditArchiveDir)
-	Gui, AuditProject:Show
-	Gui, Launch:Destroy
-	return
+	FileCopy, %pCentral%, %auditArchiveDirTest%
+	auditError := If ErrorLevel ? auditError + ErrorLevel : auditError
+	FileCopyDir, %centralFileBackupDir%, %auditArchiveDirTest%\%centralBackupName%
+	auditError := If ErrorLevel ? auditError + ErrorLevel : auditError
+	if auditError
+	{
+		PrettyMsg("Error`n`nWe were unable to archive the file being audited`n`n" . pCentral . "Contact " . bimGuy . " for additional information", "alert", 1)
+		ReloadMe()
+	}
 }
+
+
 DebugMe("Launch")
 if Detach
 	launchStatus = Detaching the Revit %pVersion% Model
 else if Specify
 	launchStatus = Launching Revit %pVersion% with Specify
 else if Audit
-	launchStatus = Detaching and Auditing a Revit %pVersion% Model
+	launchStatus = Auditing a Revit %pVersion% Model
 else
 	launchStatus = Launching the Revit %pVersion% Model
 GuiControl, Launch:, LaunchText, %launchStatus%
@@ -1638,7 +1653,7 @@ if openID = 0x0
 ControlGet, fileHwnd, Hwnd,, Edit1, ahk_ID %openID%
 ControlGet, folderHwnd, Hwnd,, SysListView321, ahk_ID %openID%
 ControlGet, openHwnd, Hwnd,, Button1, ahk_ID %openID%
-if detach
+if (detach or audit)
 	fName := pCentral
 Else
 	fName := localPath
@@ -1662,6 +1677,11 @@ If detach
 {
 	attempt := 0
 	gosub, DetachRecheck
+}
+If audit
+{
+	attempt := 0
+	gosub, AuditRecheck
 }
 attempt := 0
 gosub, OpenProject
@@ -1733,7 +1753,7 @@ ReloadMe("noshow")
 return
 
 CheckOpenID:
-attemp += 1
+attempt += 1
 if !A_IsCompiled
 	GuiControl, Launch:, LaunchSub, OpenID Attempt #%attempt%
 Sleep 100
@@ -1765,9 +1785,7 @@ DetachRecheck:
 attempt += 1
 if !A_IsCompiled
 	GuiControl, Launch:, LaunchSub, Detach Attempt #%attempt%
-WinActivate, Open, &Detach from Central
-ControlClick, Button5, ahk_ID %openID%,, L
-ControlGet, Button5State, Checked,, Button5, ahk_ID %openID%
+gosub, DetachClick
 if attempt > 5
 {
 	PrettyMsg("There was an issue detaching your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
@@ -1778,6 +1796,26 @@ if attempt > 5
 if !Button5State
 {
 	gosub, DetachRecheck
+	return
+}
+return
+
+AuditRecheck:
+attempt += 1
+if !A_IsCompiled
+	GuiControl, Launch:, LaunchSub, Audit Attempt #%attempt%
+gosub, AuditClick
+gosub, DetachClick
+if attempt > 5
+{
+	PrettyMsg("There was an issue detaching your model.`n`nPlease contact " . bimGuy . " should this problem perist.")
+	LogMe("Launcher", "Error", "Detach", "Could not check detach button", "fName", fName)
+	ReloadMe()
+	return
+}
+if (!Button5State or !Button4State)
+{
+	gosub, AuditRecheck
 	return
 }
 return
@@ -1802,6 +1840,22 @@ if fNameCheck != %fNameShort%
 	ControlSend, SysListView321, {Down}, Open, &Detach from Central
 	gosub, SpecifyCheck
 }
+return
+
+DetachClick:
+WinActivate, Open, &Detach from Central
+ControlClick, Button5, ahk_ID %openID%,, L
+ControlGet, Button5State, Checked,, Button5, ahk_ID %openID%
+return
+
+AuditClick:
+WinActivate, Open, &Detach from Central
+ControlClick, Button4, ahk_ID %openID%,, L
+WinWait, Audit Warning,, 5
+if ErrorlLevel
+	return
+ControlClick, Button1, Audit Warning
+ControlGet, Button4State, Checked,, Button4, ahk_ID %openID%
 return
 
 LaunchSplash:
