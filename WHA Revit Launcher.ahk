@@ -1,6 +1,7 @@
 ﻿#Persistent
 #SingleInstance, Force
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
+#Include ..\Class_CtlColors\Sources\Class_CtlColors.ahk
 ; #Warn  ; Enable warnings to assist with detecting common errors.
 SendMode Input  ; Recommended for new scripts due to its superior speed and reliability.
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -26,7 +27,7 @@ Else
 {
 	programName = Revit Launcher Dev
 	scriptVersion = LaunchDev
-	defDisplay := true
+	devDisplay := true
 }
 
 ; Location where icons and images are kept
@@ -120,7 +121,7 @@ else
 detach := iniLocal.Settings.Detach
 workset := iniLocal.Settings.Workset
 debug := iniLocal.Settings.Debug
-audit := 0
+audit := true
 
 ; Set location where local files will be saved
 If (iniLocal.Settings.LocalFolder) ;Check if ini file has setting
@@ -244,6 +245,7 @@ return
 ; ### Create the right click menu ###
 TrayMenu:
 ; Read list of favorites
+audit := false
 favList := iniLocal.GetSections(, "C")
 Loop, Parse, favList, `n
 {
@@ -340,6 +342,9 @@ If !A_IsCompiled
 	Menu, Utilities, Add, ListVars, ListVarsSub
 	Menu, Utilities, Add, KeyHistory, KeyHistorySub
 	Menu, Utilities, Add, Built in variables, BuiltInVar
+	Menu, Utilities, Add, Debug View, debugCheck
+	If devDisplay
+		Menu, Utilities, Check, Debug View
 }
 Menu, tray, Add, Exit, TrayExit
 OnMessage(0x404, "AHK_NOTIFYICON") ;Allow left-click of tray icon
@@ -384,7 +389,7 @@ WorksetSub:
 workset := MenuCheck(workset, "Specify Worksets")
 ; iniLocal.Settings.Workset := workset
 ; iniLocal.Save()
-TrayOpen()
+ReloadMe()
 return
 
 ListVarsSub:
@@ -397,6 +402,11 @@ return
 
 BuiltInVar:
 PrettyMsg("A_ScriptDir: " . A_ScriptDir . "`n`nA_IsCompiled: " . A_IsCompiled . "`n`nA_MyDocuments: " . A_MyDocuments)
+return
+
+DebugCheck:
+devDisplay := !devDisplay
+ReloadMe()
 return
 
 ProjStructSub:
@@ -470,6 +480,7 @@ Return
 FindLaunch:
 ; Load up the global project list
 iniCentral := class_EasyIni(iniPathCentral)
+iniLocal := class_EasyIni(iniPathLocal)
 ; Get all of the projects
 centralSections := iniCentral.GetSections(,"C")
 ; Turn list of projects into an array for looping
@@ -483,17 +494,22 @@ Gui, FindLaunch:Add, ListView, AltSubmit r10 w500 gFindLaunchList -Multi, Number
 ; Add projects to the listview
 GoSub, UserListView
 Gui, FindLaunch:Font, s10 c%guiColor1%, Arial
-Gui, FindLaunch:Add, Text, w500 center yp+230, Choose a project.  A local file will be created and opened using the correct version of Revit.  Choosing detach will open the project disconnected from the central file.`nDon't see your project listed? Contact %bimGuy%.
+Gui, FindLaunch:Add, Text, w500 center yp+240, Choose a project.  A local file will be created and opened using the correct version of Revit.  Choosing detach will open the project disconnected from the central file.`nDon't see your project listed? Contact %bimGuy%.
 Gui, FindLaunch:Font, s18 cBlack, Arial
 ; Change the button to reflect if we are opening detached or specifed worksets
-Gui, FindLaunch:Add, Button,  w150 yp+55 xp+10 gFindLaunchFind, &Launch
+Gui, FindLaunch:Add, Button,  w150 yp+60 xp+10 gFindLaunchFind, &Launch
 Gui, FindLaunch:Add, Button,  w150 yp+0 xp+165 gFindLaunchDetach, &Detach
 Gui, FindLaunch:Add, Button,  wp yp+0 xp+165 Default gFindLaunchGuiClose, &Cancel
+Gui, FindLaunch:Font, s12 cWhite, Arial
+Gui, FindLaunch:Add, Text, w560 h70 x0 hwndrStripe cYellow,
+Gui, FindLaunch:Add, CheckBox, xm+84 yp+8 vaddQuickCheck hwndrCheck, %A_Space%%A_Space%Also add project to my "Quick Launch" Menu
 GuiControl, FindLaunch:Disable, Button1
 GuiControl, FindLaunch:Disable, Button2
-Gui, FindLaunch:Show
+GuiControl, FindLaunch:Hide, addQuickCheck
+Gui, FindLaunch:Show, w560 h440
+CtlColors.Attach(rStripe, "", "Yellow")
+CtlColors.Attach(rCheck, "", "White")
 Return
-
 
 
 ; Enable the launch button once the user selects a project
@@ -503,6 +519,24 @@ If A_GuiEvent = I
 	If !detach
 		GuiControl, FindLaunch:Enable, Button1
 	GuiControl, FindLaunch:Enable, Button2
+	RowNumber := 0
+	RowNumber := LV_GetNext(RowNumber)
+	LV_GetText(rowText, rowNumber, 4)
+	if !iniLocal["favorite" . rowText]
+	{
+		GuiControl, FindLaunch:Show, addQuickCheck
+		Gui, FindLaunch:Show, w560 h473
+		CtlColors.Change(rStripe, guiColor2)
+		CtlColors.Change(rCheck, guiColor2, "White")
+	}
+	else
+	{
+		GuiControl, FindLaunch:Hide, addQuickCheck
+		Gui, FindLaunch:Show, w560 h440
+		CtlColors.Change(rStripe, "")
+		CtlColors.Change(rCheck, "", "White")
+		
+	}
 }
 If A_GuiEvent = DoubleClick
 	if detach
@@ -519,9 +553,17 @@ RowNumber := 0
 RowNumber := LV_GetNext(RowNumber)
 LV_GetText(rowText, rowNumber, 4)
 projectID := rowText
+Gui, FindLaunch:Submit
+GuiControlGet, addQuickCheck
+PrettyMsg(addQuickCheck)
+if addQuickCheck
+{
+	addQuick := projectID
+}
+addQuickCheck := 0
 DebugMe("FindLaunchFind")
 LogMe("FindLaunch", projectID)
-Gui, Destroy
+Gui, FindLaunch:Destroy
 GoSub, MainRoutine
 Return
 ; ### End of the Search and Launch Menu ###
@@ -1339,7 +1381,7 @@ Return
 
 AuditProjectAudit:
 ; Make sure you zero out the RowNumber otherwise you could see some weird behaviour
-audit := 1
+audit := true
 ; Get the project selected, set project variables, and run the main routine
 RowNumber := 0
 RowNumber := LV_GetNext(RowNumber)
@@ -1389,13 +1431,19 @@ Gui, AuditConfirm:Add, Text, center w%guiWidth%, %guiTitle%
 Gui, AuditConfirm:Font, %pFont% cBlack, Arial
 Gui, AuditConfirm:Add, Text, w%guiWidth%, %projectTitle%
 Gui, AuditConfirm:Font, s12 cBlack, Arial
-Gui, AuditConfirm:Add, Text, w%guiWidth%, You are about to embark on an irreversible process. What must happen before You audit this model?
+Gui, AuditConfirm:Add, Text, w%guiWidth%, You are about to embark on an irreversible process. What MUST happen before this model is audited?
 Gui, AuditConfirm:Font, s14 c%guiColor1%, Arial
 bDist := ""
+numWidth := 35
+bWidth := guiWidth - numWidth
+qLetter := "A."
 gosub, %qList1%
-bDist := "yp+45"
+bDist := "yp+53"
+qLetter := "B."
 gosub, %qList2%
+qLetter := "C."
 gosub, %qList3%
+qLetter := "D."
 gosub, %qList4%
 Gui, AuditConfirm:Show
 WinWaitClose
@@ -1409,19 +1457,23 @@ Gui, AuditConfirm:Destroy
 return
 
 AuditQuestion1:
-Gui, AuditConfirm:Add, Button, vq1 gAuditQuestionTest w%guiWidth% %bDist%, Make certian all users have exited the model.
+Gui, AuditConfirm:Add, Text, xm w%numWidth% %bDist%, %qLetter%
+Gui, AuditConfirm:Add, Button, yp-8 xp+%numWidth% vq1 gAuditQuestionTest w%bWidth% , Make certian all users have exited the model.
 return
 
 AuditQuestion2:
-Gui, AuditConfirm:Add, Button, vq2 gAuditQuestionTest w%guiWidth% %bDist%, %qText1%
+Gui, AuditConfirm:Add, Text, xm w%numWidth% %bDist%, %qLetter%
+Gui, AuditConfirm:Add, Button, yp-8 xp+%numWidth% vq2 gAuditQuestionTest w%bWidth%, %qText1%
 return
 
 AuditQuestion3:
-Gui, AuditConfirm:Add, Button, vq3 gAuditQuestionTest w%guiWidth% %bDist%, %qText2%
+Gui, AuditConfirm:Add, Text, xm w%numWidth% %bDist%, %qLetter%
+Gui, AuditConfirm:Add, Button, yp-8 xp+%numWidth% vq3 gAuditQuestionTest w%bWidth%, %qText2%
 return
 
 AuditQuestion4:
-Gui, AuditConfirm:Add, Button, vq4 gAuditQuestionTest w%guiWidth% %bDist%, %qText3%
+Gui, AuditConfirm:Add, Text, xm w%numWidth% %bDist%, %qLetter%
+Gui, AuditConfirm:Add, Button, yp-8 xp+%numWidth% vq4 gAuditQuestionTest w%bWidth%, %qText3%
 return
 
 AuditQuestionTest:
@@ -1491,10 +1543,10 @@ return
 
 
 ; ### Main Routine ###
+
 ; Routine that actually does the work of creating backups and opening locals
 MainRoutine:
 clickFail := 0
-;~ debug := 1
 if audit
 {
 	DebugMe("Audit Routine")
@@ -1574,6 +1626,7 @@ else if (workset and detach)
 	DebugMe("Detach and Specify Worksets")
 	gosub, GetProjectInfo
 	gosub, LaunchSplash
+	gosub, QuickSuggest
 	gosub, DebugSplash
 	gosub, FindRevit
 	gosub, FindMonitor
@@ -1602,6 +1655,8 @@ else if (workset and detach)
 	if clickFail
 		gosub, OpenFail
 	gosub, DetachWait
+	gosub, SaveWait
+	gosub, LaunchTrack
 	gosub, MainRoutineClose
 }
 else if detach
@@ -1609,6 +1664,7 @@ else if detach
 	DebugMe("Detach Routine")
 	gosub, GetProjectInfo
 	gosub, LaunchSplash
+	gosub, QuickSuggest
 	gosub, DebugSplash
 	gosub, FindRevit
 	gosub, FindMonitor
@@ -1633,6 +1689,8 @@ else if detach
 	if clickFail
 		gosub, OpenFail
 	gosub, DetachWait
+	gosub, SaveWait
+	gosub, LaunchTrack
 	gosub, MainRoutineClose
 }
 else if workset
@@ -1719,10 +1777,13 @@ PrettyMsg("Error!`n`nWe are having trouble launching your project. This happens 
 ReloadMe()
 return
 
+AuditFail:
+PrettyMsg("Error!`n`nWe are having trouble Auditing your project. It is very likely that you have not relinquished permissions properly. Please try auditing your project again.", "alert", 1)
+ReloadMe()
+return
+
 ClickFailLoop:
 DebugMe("ClickFailLoop", "Round " . A_Index)
-If !A_IsCompiled
-	Sleep 400
 WinActivate, Open, &Detach from Central
 ControlClick, Button2, A
 IfWinExist, Open, &Detach from Central
@@ -1866,6 +1927,10 @@ if iniLocal[quickSection]
 	quickShow := false
 	suggestCheckText = This won't show. The project is already in list.
 }
+else if addQuick
+{
+	quickShow := true
+}
 else
 {
 	if !(iniLocal.AddSection(projectID))
@@ -1918,7 +1983,7 @@ else
 	}
 }
 
-if (quickShow || !A_IsCompiled)
+if (quickShow || devDisplay)
 {
 	launchInfo := if (!(iniLocal.AddSection(projectID)))
 	? "Last Launched: " . iniLocal[projectID].LastLaunch
@@ -1932,7 +1997,7 @@ if (quickShow || !A_IsCompiled)
 	Gui, QuickSuggest:Color, c%guiColor2%
 	Gui, QuickSuggest:Font, cWhite s10, Arial
 	Gui, QuickSuggest:Add, Text, w%launchWidth% Center hwndSCT vsuggestCheckText gQuickSuggestAdd, %suggestCheckText%
-	if !A_IsCompiled
+	if devDisplay
 	{
 		Gui, QuickSuggest:Add, Text, w%launchWidth% yp+20 Center c%guiColor0%, %launchInfo%
 		suggestHeight := 55
@@ -1944,6 +2009,10 @@ if (quickShow || !A_IsCompiled)
 	OnMessage(0x200, "MouseOver")
 }
 return
+if addQuick
+{
+	GuiControl, QuickSuggest:, suggestCheckText, This project will be added to your quicklist after launch.
+}
 gosub, LaunchTrack
 
 QuickSuggestAdd:
@@ -2002,24 +2071,31 @@ MouseOver(wParam, lParam, Msg, HWND)
 }
 
 DebugSplash:
-Gui, DebugSplash:New
-Gui, DebugSplash:+OwnerLaunch
-Gui, DebugSplash:-Caption AlwaysOnTop
-Gui, DebugSplash:Margin, 50, 10
-Gui, DebugSplash:Color, black
-Gui, DebugSplash:Font, c%guiColor2% s14, Arial
-Gui, DebugSplash:Add, Text, xm center w%launchWidth% vDebugSplashText, Launching...
-Gui, DebugSplash:Font, c%guiColor1% s10, Arial
-Gui, DebugSplash:Add, Text, yp+25 center w%launchWidth% vDebugSplashSub, %pNumber% %pName%
-Gui, DebugSplash:Font, c%guiColor1% s18, Arial
-debugHeight := 65
-debugY := launchY - debugHeight
-Gui, DebugSplash:Show, y%debugY% h%debugHeight%
+if devDisplay
+{
+	Gui, DebugSplash:New
+	Gui, DebugSplash:+OwnerLaunch
+	Gui, DebugSplash:-Caption AlwaysOnTop
+	Gui, DebugSplash:Margin, 50, 10
+	Gui, DebugSplash:Color, black
+	Gui, DebugSplash:Font, c%guiColor2% s14, Arial
+	Gui, DebugSplash:Add, Text, xm center w%launchWidth% vDebugSplashText, Launching...
+	Gui, DebugSplash:Font, c%guiColor1% s10, Arial
+	Gui, DebugSplash:Add, Text, yp+25 center w%launchWidth% vDebugSplashSub, %pNumber% %pName%
+	Gui, DebugSplash:Font, c%guiColor1% s18, Arial
+	debugHeight := 65
+	debugY := launchY - debugHeight
+	Gui, DebugSplash:Show, y%debugY% h%debugHeight%
+}
 return
 
 LocalBackup:
 DebugMe("LocalBackup")
 ;Create a backup of the last local created
+
+; If the backup folder doesn't exist, we don't need any of this
+IfNotExist, %projectFolder%
+	return
 IfExist, %projectFolder%\%localFile%.4.rvt
 {
 	FileGetTime, backupFour, %projectFolder%\%localFile%.4.rvt, C
@@ -2028,12 +2104,16 @@ IfExist, %projectFolder%\%localFile%.4.rvt
 	If backupFour > weekTwo
 	{
 		FileMove, %projectFolder%\%localFile%.3.rvt, %projectFolder%\%localFile%.4.rvt
+		LauncherErrorLog(ErrorLevel, "Backup4 Create", projectFolder, localFile)
 	}
 }
 Else
 {
 	IfExist, %projectFolder%\%localFile%.3.rvt
+	{
 		FileMove, %projectFolder%\%localFile%.3.rvt, %projectFolder%\%localFile%.4.rvt
+		LauncherErrorLog(ErrorLevel, "Backup4 Create", projectFolder, localFile)
+	}
 }
 IfExist, %projectFolder%\%localFile%.3.rvt
 {
@@ -2043,6 +2123,7 @@ IfExist, %projectFolder%\%localFile%.3.rvt
 	If backupThree > weekOne
 	{
 		FileMove, %projectFolder%\%localFile%.2.rvt, %projectFolder%\%localFile%.3.rvt
+		LauncherErrorLog(ErrorLevel, "Backup3 Create", projectFolder, localFile)
 		FileSetTime,, %projectFolder%\%localFile%.3.rvt, C
 	}
 }
@@ -2051,21 +2132,32 @@ Else
 	IfExist, %projectFolder%\%localFile%.2.rvt
 	{
 		FileMove, %projectFolder%\%localFile%.2.rvt, %projectFolder%\%localFile%.3.rvt
+		LauncherErrorLog(ErrorLevel, "Backup3 Create", projectFolder, localFile)
 		FileSetTime,, %projectFolder%\%localFile%.3.rvt, C
 	}
 }
 IfExist, %projectFolder%\%localFile%.1.rvt ;backup of a backup
+{
 	fileMove, %projectFolder%\%localFile%.1.rvt, %projectFolder%\%localFile%.2.rvt, 1
+	LauncherErrorLog(ErrorLevel, "Backup3 Create", projectFolder, localFile)
+}
 IfExist, %localPath% ;backup of the local
+{
 	fileMove, %localPath%, %projectFolder%\%localFile%.1.rvt, 1
+	LauncherErrorLog(ErrorLevel, "Backup3 Create", projectFolder, localFile)
+}
 return
 
 LocalCreate:
 DebugMe("LocalCreate")
-FileCopy, %pCentral%, %localPath%, 1
-if ErrorLevel ;Check to make sure everything copied correctly
+IfNotExist, %projectFolder%
 {
-	LogMe("Launcher", "Error", "LocalCreate", projectID, localPath, pCentral)
+	FileCreateDir, %projectFolder%
+	LauncherErrorLog(ErrorLevel, "Project Folder Create", projectFolder)
+}
+FileCopy, %pCentral%, %localPath%, 1
+if LauncherErrorLog(ErrorLevel, "Local File Create", pCentral, localPath)
+{
 	PrettyMsg("The local file could not be copied to your computer.  Please see your BIM manager for additional information.", "alert", 1)
 	ReloadMe()
 }
@@ -2155,7 +2247,7 @@ else
 openID := 0x0
 while (openID = 0x0)
 {
-	if !A_IsCompiled
+	if devDisplay
 		DebugUpdate("", "Attempt #" . A_Index)
 	Sleep 100
 	WinActivate, Open, &Detach from Central
@@ -2195,7 +2287,7 @@ while !fNameCheck
 		clickFail := 1
 		break
 	}
-	if !A_IsCompiled
+	if devDisplay
 		DebugUpdate("", "Attempt #" . A_Index)
 	WinActivate, ahk_ID %openID%
 	ControlSend, SysListView321, %fNameShort%, ahk_ID %openID%
@@ -2251,7 +2343,7 @@ while (WinExist("Detach Model from Central"))
 	Sleep, 100
 	if A_Index > 10
 		break
-	if !A_IsCompiled
+	if devDisplay
 		DebugMe("", "Attempt #" . A_Index)
 	WinActivate
 	Send, {Enter}
@@ -2260,7 +2352,14 @@ return
 
 LocalWait:
 DebugMe("LocalWait")
-LogMe("Launcher", "standard", projectID, fName)
+LogMe("Launcher", "Standard", projectID, fName)
+Sleep, 200
+IfWinExist, ^Cannot Open Model
+{
+	LogMe("Launcher", "Error", "Cannot Open Model Dialog", projectID, fName)
+	GoSub, OpenFail
+}
+
 WinWait, Copied Central Model,, 30
 If !ErrorLevel
 {
@@ -2274,10 +2373,13 @@ DebugMe("MainRoutineClose")
 Gui, Launch:Destroy
 WinActivate, ^%revitTitle%
 ; Set detach back to global setting
+iniLocal := class_EasyIni(iniPathLocal)
+detach := iniLocal.Settings.Detach
 ReloadMe("noshow")
 return
 
 LaunchTrack:
+PrettyMsg(addQuick)
 if addQuick
 {
 	gosub, AddProjectAdd
@@ -2328,7 +2430,7 @@ While !Button5State
 		clickFail := 1
 		break
 	}
-	If !A_IsCompiled
+	If devDisplay
 		DebugUpdate("", "Attempt #" . A_Index)
 	Sleep, 100
 	WinActivate, Open, &Detach from Central
@@ -2346,7 +2448,7 @@ AuditClick:
 DebugMe("AuditClick")
 Loop, 8
 {
-	if !A_IsCompiled
+	if devDisplay
 		DebugUpdate("", "Attempt #" . A_Index)
 	WinActivate, Open, &Detach from Central
 	if mod(A_Index, 2) = 1
@@ -2377,7 +2479,7 @@ While openState
 		clickFail := 1
 		break
 	}
-	if !A_IsCompiled
+	if devDisplay
 		DebugUpdate("", "Attempt #" . A_Index)
 	ControlClick, Button1, ahk_ID %openID%,, L, 2, NA
 	WinWaitNotActive, ahk_ID %openID%,, 1
@@ -2389,7 +2491,7 @@ return
 ProjectWait:
 DebugMe("ProjectWait")
 WinGetTitle, originalRevitTitle, ^%revitTitle%
-revitTitleMatch := 1
+revitTitleMatch := true
 While revitTitleMatch
 {
 	if A_Index > 50
@@ -2400,6 +2502,16 @@ While revitTitleMatch
 	auditFail := 0
 	DebugUpdate("", "Attempt #" . A_Index)
 	Sleep, 2000
+	IfWinExist, ^Workset File Already Exists
+	{
+		if audit
+		{
+			WinActivate, ^Workset File Already Exists
+			Send, !y
+		}
+		else
+			gosub, OpenFail
+	}
 	WinGetTitle, newRevitTitle, ^%revitTitle%
 	If (originalRevitTitle = newRevitTitle)
 		auditFail := 1
@@ -2438,15 +2550,31 @@ return
 CloseModel:
 DebugMe("CloseModel")
 WinActivate, ^%revitTitle%
-Send, !fc
-DebugUpdate("", "Sent Close Model")
-WinWait, ^Save As,, 2
-if !ErrorLevel
+WinGetTitle, originalRevitTitle, ^%revitTitle%
+Loop, 5
 {
-	WinActivate
-	IfWinActive, A
-		Send, {Return}
+	DebugUpdate("", "Attempt #" . A_Index)
+	Send, !fc
+	DebugUpdate("", "Sent Close Model")
+	WinWait, ^Save As,, 2
+	if !ErrorLevel
+	{
+		WinActivate
+		IfWinActive, A
+			Send, {Return}
+	}
+	Sleep, 2000
+	WinGetTitle, newRevitTitle, ^%revitTitle%
+	If (originalRevitTitle = newRevitTitle)
+		auditFail := true
+	else
+	{
+		auditFail := false
+		break
+	}
 }
+if auditFail
+	gosub, AuditFail
 return
 
 SaveAsCentral:
@@ -2483,7 +2611,7 @@ SyncRelease:
 DebugMe("SyncRelease")
 Sleep, 1000
 WinActivate, ^%revitTitle%
-Send, !3{Enter}
+Send, !cs{Enter}
 WinWait, ^Synchronize with Central, , 30
 if ErrorLevel
 {
@@ -2568,8 +2696,11 @@ trayOpen() ;open the tray menu in the lower right corner
 ReloadMe(sx = "show")
 {
 	Global
-	projectID = ""
-	If !A_IsCompiled
+	CtlColors.Free()
+	audit := false
+	projectID := ""
+	addQuick := false
+	If devDisplay
 		Gui, DebugSplash:Destroy
 	Menu, Tray, DeleteAll
 	if !noNetwork
@@ -2582,7 +2713,6 @@ ReloadMe(sx = "show")
 		CoordMode, Menu, Screen
 		Menu, Tray, Show, %mouseX%, %mouseY%
 		CoordMode, Menu, Window
-		audit := 0
 	}
 	Exit
 }
@@ -2597,11 +2727,12 @@ MouseCleanClick(x, y)
 DebugMe(debugText, debugSubText := "")
 {
 	Global
-	If !A_IsCompiled
+	If devDisplay
 	{
 		if !debugSubText
 			debugSubText := pNumber . " " . pName
 		DebugUpdate(debugText, debugSubText)
+		Sleep, 400
 	}
 	If (debug)
 	{
@@ -2638,3 +2769,17 @@ LogMe(category, params*)
 		Return 1
 }
 Return
+
+LauncherErrorLog(sError, params*)
+{
+	Global projectID
+	sep := ", "
+	allParam := ""
+	If sError
+	{
+		for index, param in params
+			allParam .= sep . param
+		LogMe("Launcher", "Error", projectID, allParam)
+	}
+	return %sError%
+}
