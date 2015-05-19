@@ -479,6 +479,9 @@ Return
 ; Menu that is launched when a user wants to open a project they don't access frequently. 
 FindLaunch:
 ; Load up the global project list
+guiWidth := 500
+guiMargin := 30
+guiWidthTotal := guiWidth + (guiMargin * 2)
 iniCentral := class_EasyIni(iniPathCentral)
 iniLocal := class_EasyIni(iniPathLocal)
 ; Get all of the projects
@@ -488,25 +491,25 @@ StringSplit, centralSections, centralSections, `n
 ; Create the actual menu
 Gui, FindLaunch:New,, %programName%
 Gui, FindLaunch:Font, s24 , Arial
-Gui, FindLaunch:Add, Text, center w500, Select a project to Launch:
+Gui, FindLaunch:Add, Text, center w%guiWidth%, Select a project to Launch:
 Gui, FindLaunch:Font, s10 , Arial
-Gui, FindLaunch:Add, ListView, AltSubmit r10 w500 gFindLaunchList -Multi, Number|Name|Version|LaunchID
+Gui, FindLaunch:Add, ListView, AltSubmit r10 w%guiWidth% gFindLaunchList -Multi, Number|Name|Version|LaunchID
 ; Add projects to the listview
 GoSub, UserListView
 Gui, FindLaunch:Font, s10 c%guiColor1%, Arial
-Gui, FindLaunch:Add, Text, w500 center yp+240, Choose a project.  A local file will be created and opened using the correct version of Revit.  Choosing detach will open the project disconnected from the central file.`nDon't see your project listed? Contact %bimGuy%.
+Gui, FindLaunch:Add, Text, w%guiWidth% center yp+240, Choose a project.  A local file will be created and opened using the correct version of Revit.  Choosing detach will open the project disconnected from the central file.`nDon't see your project listed? Contact %bimGuy%.
 Gui, FindLaunch:Font, s18 cBlack, Arial
 ; Change the button to reflect if we are opening detached or specifed worksets
 Gui, FindLaunch:Add, Button,  w150 yp+60 xp+10 gFindLaunchFind, &Launch
 Gui, FindLaunch:Add, Button,  w150 yp+0 xp+165 gFindLaunchDetach, &Detach
 Gui, FindLaunch:Add, Button,  wp yp+0 xp+165 Default gFindLaunchGuiClose, &Cancel
 Gui, FindLaunch:Font, s12 cWhite, Arial
-Gui, FindLaunch:Add, Text, w560 h70 x0 hwndrStripe cYellow,
+Gui, FindLaunch:Add, Text, w%guiWidthTotal% h70 x0 hwndrStripe cYellow,
 Gui, FindLaunch:Add, CheckBox, xm+84 yp+8 vaddQuickCheck hwndrCheck, %A_Space%%A_Space%Also add project to my "Quick Launch" Menu
 GuiControl, FindLaunch:Disable, Button1
 GuiControl, FindLaunch:Disable, Button2
 GuiControl, FindLaunch:Hide, addQuickCheck
-Gui, FindLaunch:Show, w560 h440
+Gui, FindLaunch:Show, w%guiWidthTotal% h440
 CtlColors.Attach(rStripe, "", "Yellow")
 CtlColors.Attach(rCheck, "", "White")
 Return
@@ -555,10 +558,9 @@ LV_GetText(rowText, rowNumber, 4)
 projectID := rowText
 Gui, FindLaunch:Submit
 GuiControlGet, addQuickCheck
-PrettyMsg(addQuickCheck)
 if addQuickCheck
 {
-	addQuick := projectID
+	addQuick := !iniLocal["favorite" . rowText] ? projectID : false
 }
 addQuickCheck := 0
 DebugMe("FindLaunchFind")
@@ -660,7 +662,7 @@ Gui, RemoveProject:New,, %programName%
 Gui, RemoveProject:Font, %tFont% , Arial
 Gui, RemoveProject:Add, Text, center w%guiWidth%, %guiTitle%
 Gui, RemoveProject:Font, s10, Arial
-Gui, RemoveProject:Add, ListView, AltSubmit r10 w%guiWidth% gRemoveProjectList -Multi, Name|ID
+Gui, RemoveProject:Add, ListView, AltSubmit r10 w%guiWidth% gRemoveProjectList, Name|ID
 ; Add a list of all the projects in the Quick Launch list to the list view
 loop, %favList0%
 {
@@ -710,21 +712,34 @@ Return
 RemoveProjectRemove:
 ; This does the hard work of actually REMOVING the project from the Quick Launch list
 RowNumber := 0
-RowNumber := LV_GetNext(RowNumber)
-LV_GetText(rowText, rowNumber, 2)
-pMessage := PrettyMsg("Are you sure you want to remove the following project from your list?`n`n" . iniLocal [favList%RowNumber%].Name, "question")
-if (pMessage == "Yes")
+rowCount := 0
+rowNameAll := ""
+delRows := Object()
+Loop, % LV_GetCount("Selected")
 {
-	iniLocal.DeleteSection(favList%RowNumber%)
+	rowNumber := LV_GetNext(rowNumber)
+	LV_GetText(rowName, rowNumber, 1)
+	LV_GetText(rowText, rowNumber, 2)
+	delRows[A_Index] := rowText
+	rowNameAll := if rowNameAll ? rowNameAll . "`n" . rowName : rowName
+}
+pMessage := PrettyMsg("Are you sure you want to remove the following projects from your list?`n`n" . rowNameAll, "question")
+if (pMessage = "Yes")
+{
+	Loop, % delRows.MaxIndex()
+	{
+		iniLocal.DeleteSection(delRows[A_Index])
+		Gui, RemoveProject:Destroy
+		LogMe("Favorite", "Remove", delRows[A_Index])
+	}
 	iniLocal.Save()
-	Gui, RemoveProject:Destroy
-	LogMe("Favorite", "Remove", favList%RowNumber%)
 	ReloadMe()
 }
-else if (pMessage == "No")
+else if (pMessage = "No")
 	Gui, RemoveProject:Destroy
+rowNameAll := ""
+delRows := Object()
 return
-
 
 
 AddProjectList:
@@ -740,6 +755,7 @@ Return
 AddProjectAdd:
 ; This does the hard work of actually ADDING the project to the Quick Launch list
 ; Make sure you zero out the RowNumber otherwise you could see some weird behaviour
+addRows := Object()
 if addQuick
 {
 	rowText := addQuick
@@ -1552,7 +1568,6 @@ if audit
 	DebugMe("Audit Routine")
 	BlockInput, Send
 	gosub, GetProjectInfo
-	gosub, GetProjectInfo
 	gosub, GetAuditInfo
 	gosub, LaunchSplash
 	gosub, DebugSplash
@@ -1774,6 +1789,7 @@ return
 
 OpenFail:
 PrettyMsg("Error!`n`nWe are having trouble launching your project. This happens from time to time. Please try launching your project again.", "alert", 1)
+LauncherErrorLog("OpenFail", projectID)
 ReloadMe()
 return
 
@@ -1783,7 +1799,8 @@ ReloadMe()
 return
 
 ClickFailLoop:
-DebugMe("ClickFailLoop", "Round " . A_Index)
+DebugMe("ClickFailLoop", "Round #" . A_Index)
+LauncherErrorLog("ClickFailLoop", A_Index)
 WinActivate, Open, &Detach from Central
 ControlClick, Button2, A
 IfWinExist, Open, &Detach from Central
@@ -1802,7 +1819,7 @@ workingFolder := iniCentral [projectID].WorkingFolder
 IfNotExist, %pCentral% ;Check if project is setup correctly
 	{
 		PrettyMsg("The central file does not exist:`n`n" . pCentral . "`n`nPlease see " . bimGuy . " for assistance")
-		LogMe("Launcher", "Error", "Locating Central", projectID, pCentral)
+		LauncherErrorLog("Locating Central", pCentral)
 		ReloadMe()
 	}
 revitUser = %A_Username% ;Users computer username
@@ -1828,6 +1845,7 @@ IfWinExist, %revitTitle%, `{%localFile%.rvt`} ;Check to see if the file is alrea
 {
 	WinActivate
 	PrettyMsg("Your local file is already open:`n`n" . localFile . ".rvt")
+	LauncherErrorLog("Open Local File")
 	ReloadMe()
 }
 IfWinExist, %revitTitle%, `{%CentralFileName%`}
@@ -1835,7 +1853,7 @@ IfWinExist, %revitTitle%, `{%CentralFileName%`}
 	WinActivate
 	WinMaximize
 	PrettyMsg("Open Central File!`n`n" . pCentral . " is currently open. Please close this file immediately and try again.", "alert", 1)
-	LogMe("Launcher", "Error", "Open Central File", pCentral)
+	LauncherErrorLog("Open Central File")
 	ReloadMe()
 }
 return
@@ -1866,7 +1884,7 @@ Else
 IfNotExist, %revitPath%
 {
 	PrettyMsg("Revit " . pVersion . " cannot be found on this computer.  Please see " . bimGuy . " for additional information.", , 1)
-	LogMe("Launcher", "Error", "FindRevit", revitPath, projectID, pVersion)
+	LauncherErrorLog("FindRevit", revitPath, pVersion)
 	ReloadMe()
 }
 return
@@ -1884,7 +1902,7 @@ IfNotExist, %monitorPath%
 {
 	PrettyMsg("The Worksharing Monitor could not be found on your system.  Please notify " . bimGuy . " so you can play well with others.")
 	monitorPath =
-	LogMe("Launcher", "Error", "FindMonitor", monitorPath, projectID, pVersion)
+	LauncherErrorLog("FindMonitor", monitorPath, pVersion)
 }
 return
 
@@ -1920,7 +1938,6 @@ return
 QuickSuggest:
 DebugMe("QuickSuggest")
 iniLocal := class_EasyIni(iniPathLocal)
-addQuick := false
 quickSection := "Favorite" . projectID
 if iniLocal[quickSection]
 {
@@ -1944,7 +1961,7 @@ else
 		if (dayCount > 7)
 		{
 			quickShow := false
-			suggestCheckText = This won't show. Last launch was %dayCount% ago.
+			suggestCheckText = This won't show. Last launch was %dayCount% days ago.
 		}
 		else if (launchCount > 12)
 		{
@@ -1961,16 +1978,8 @@ else
 		}
 		else
 		{
-			if (launchCount > 1)
-			{
-				quickShow := true
-				suggestCheckText = Come here often? Add this project to my quick launch list
-			}
-			else
-			{
-				quickShow := false
-				suggestCheckText = This won't show. It may be the second launch.
-			}
+			quickShow := true
+			suggestCheckText = Come here often? Add this project to my quick launch list.
 		}
 	}
 	else
@@ -1999,7 +2008,8 @@ if (quickShow || devDisplay)
 	Gui, QuickSuggest:Add, Text, w%launchWidth% Center hwndSCT vsuggestCheckText gQuickSuggestAdd, %suggestCheckText%
 	if devDisplay
 	{
-		Gui, QuickSuggest:Add, Text, w%launchWidth% yp+20 Center c%guiColor0%, %launchInfo%
+		Gui, QuickSuggest:Add, Text, w%launchWidth% yp+20 Center c%guiColor0% vlaunchStatus
+			, %launchInfo%
 		suggestHeight := 55
 	}
 	else
@@ -2008,17 +2018,17 @@ if (quickShow || devDisplay)
 	Gui, QuickSuggest:Show, y%launchY% h%suggestHeight%
 	OnMessage(0x200, "MouseOver")
 }
-return
 if addQuick
 {
 	GuiControl, QuickSuggest:, suggestCheckText, This project will be added to your quicklist after launch.
 }
-gosub, LaunchTrack
+return
 
 QuickSuggestAdd:
 DebugUpdate("", "Clicked to add to quick list")
 addQuick := projectId
 GuiControl, QuickSuggest:, suggestCheckText, Nice! The project will be added to your quicklist.
+LogMe("Launcher", "QuickAdd", projectID, "User clicked to add project to quicklist")
 return
 
 MouseOver(wParam, lParam, Msg, HWND)
@@ -2028,6 +2038,10 @@ MouseOver(wParam, lParam, Msg, HWND)
 	Static underOn
 	Static oldHWND := HWND
 	Critical
+	SetFormat, Integer, H
+	hwndHex := HWND
+	SetFormat, Integer, D
+	GuiControl, QuickSuggest:, launchStatus, hwnd: %hwnd% - SCT: %SCT% - hwndHex: %hwndHex%
 	if (HWND = SCT)
 	{
 		if !underOn
@@ -2192,6 +2206,7 @@ auditError := If ErrorLevel ? auditError + ErrorLevel : auditError
 if auditError
 {
 	PrettyMsg("Error`n`nWe were unable to archive the file being audited`n`n" . pCentral . "Contact " . bimGuy . " for additional information", "alert", 1)
+	
 	ReloadMe()
 }
 return
@@ -2379,7 +2394,6 @@ ReloadMe("noshow")
 return
 
 LaunchTrack:
-PrettyMsg(addQuick)
 if addQuick
 {
 	gosub, AddProjectAdd
@@ -2609,14 +2623,21 @@ return
 
 SyncRelease:
 DebugMe("SyncRelease")
-Sleep, 1000
+Sleep, 2000
 WinActivate, ^%revitTitle%
-Send, !cs{Enter}
-WinWait, ^Synchronize with Central, , 30
-if ErrorLevel
+Loop, 3
 {
-	auditFail := 1
-	return
+	Send, !cs{Enter}
+	WinWait, ^Synchronize with Central, , 1
+	if ErrorLevel
+	{
+		auditFail := 1
+		
+		LauncherErrorLog("SyncRelease", A_Index)
+		return
+	}
+	else
+		break
 }
 WinActivate
 Send, !u
